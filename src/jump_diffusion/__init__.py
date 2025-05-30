@@ -6,8 +6,8 @@ of jump-diffusion processes with asymmetric jump distributions.
 """
 
 __version__ = "0.1.0"
-__author__ = "Your Name"
-__email__ = "your.email@example.com"
+__author__ = "Juan David OSPINA ARANGO"
+__email__ = "jdospina@gmail.com"
 
 # Core imports for easy access
 from .simulation import JumpDiffusionSimulator
