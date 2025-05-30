@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/validation/monte_carlo.py
-# ==========================================
-
 """
 Monte Carlo validation experiments for jump-diffusion estimators.
 
