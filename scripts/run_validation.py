@@ -1,8 +1,3 @@
-# ==========================================
-# scripts/run_validation.py
-# ==========================================
-
-#!/usr/bin/env python3
 """
 Script to run validation experiments from command line.
 
