@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/validation/__init__.py
-# ==========================================
-
 """
 Validation and Testing Tools
 
