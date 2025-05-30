@@ -1,7 +1,3 @@
-# ==========================================
-# examples/validation_experiment.py
-# ==========================================
-
 """
 Complete validation experiment example.
 
