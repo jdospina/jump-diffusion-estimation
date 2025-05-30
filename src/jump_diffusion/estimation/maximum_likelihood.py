@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/estimation/maximum_likelihood.py
-# ==========================================
-
 """
 Maximum Likelihood Estimator for Jump-Diffusion Models
 
