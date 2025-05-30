@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/simulation/base_simulator.py
-# ==========================================
-
 """
 Base simulator class for stochastic processes.
 """
