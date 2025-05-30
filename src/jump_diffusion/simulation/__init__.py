@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/simulation/__init__.py  
-# ==========================================
-
 """
 Simulation Tools for Jump-Diffusion Processes
 
