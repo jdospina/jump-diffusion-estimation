@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/__init__.py
-# ==========================================
-
 """
 Jump-Diffusion Parameter Estimation Library
 
