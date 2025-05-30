@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/models/__init__.py
-# ==========================================
-
 """
 Jump-Diffusion Model Definitions
 
