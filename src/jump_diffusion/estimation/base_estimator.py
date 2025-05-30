@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/estimation/base_estimator.py
-# ==========================================
-
 """
 Base estimator class for parameter estimation.
 """
