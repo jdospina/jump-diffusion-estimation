@@ -1,7 +1,3 @@
-# ==========================================
-# examples/basic_usage.py
-# ==========================================
-
 """
 Basic Usage Example for Jump-Diffusion Estimation
 
