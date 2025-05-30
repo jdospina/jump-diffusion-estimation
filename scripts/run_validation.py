@@ -22,9 +22,9 @@ def main():
     parser.add_argument('--n_steps', type=int, default=252, help='Number of time steps')
     parser.add_argument('--output', type=str, help='Output file for results')
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
-    
+
     args = parser.parse_args()
-    
+
     # Default parameters
     true_params = {
         'mu': 0.05,
@@ -33,9 +33,9 @@ def main():
         'jump_scale': 0.15,
         'jump_skew': 2.0
     }
-    
+
     print(f"Running validation with {args.n_sims} simulations...")
-    
+
     experiment = ValidationExperiment(true_params)
     results_df = experiment.run_experiment(
         n_simulations=args.n_sims,
@@ -43,10 +43,10 @@ def main():
         n_steps=args.n_steps,
         seed_base=args.seed
     )
-    
+
     if len(results_df) > 0:
         analysis = experiment.analyze_results()
-        
+
         if args.output:
             # Save results
             output_data = {
@@ -60,12 +60,12 @@ def main():
                 'results': results_df.to_dict('records'),
                 'analysis': analysis
             }
-            
+
             with open(args.output, 'w') as f:
                 json.dump(output_data, f, indent=2, default=str)
-            
+
             print(f"Results saved to {args.output}")
-        
+
         experiment.plot_results()
     else:
         print("Validation experiment failed.")

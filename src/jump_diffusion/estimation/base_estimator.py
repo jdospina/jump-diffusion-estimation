@@ -10,11 +10,11 @@ class BaseEstimator(ABC):
     """
     Abstract base class for all parameter estimators.
     """
-    
+
     def __init__(self, data: np.ndarray, dt: float):
         """
         Initialize estimator with data.
-        
+
         Parameters:
         -----------
         data : np.ndarray
@@ -26,36 +26,36 @@ class BaseEstimator(ABC):
         self.dt = dt
         self.fitted = False
         self.results = None
-    
+
     @abstractmethod
     def estimate(self, **kwargs) -> Dict[str, Any]:
         """
         Estimate model parameters.
-        
+
         Returns:
         --------
         dict
             Estimation results including parameters and diagnostics
         """
         pass
-    
+
     @abstractmethod
     def log_likelihood(self, params: np.ndarray) -> float:
         """
         Calculate log-likelihood for given parameters.
-        
+
         Parameters:
         -----------
         params : np.ndarray
             Parameter values
-            
+
         Returns:
         --------
         float
             Log-likelihood value
         """
         pass
-    
+
     def get_results(self) -> Optional[Dict[str, Any]]:
         """Get estimation results if available."""
         return self.results

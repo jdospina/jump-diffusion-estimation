@@ -1,7 +1,7 @@
 """
 Jump-Diffusion Parameter Estimation Library
 
-A comprehensive Python library for simulating and estimating parameters 
+A comprehensive Python library for simulating and estimating parameters
 of jump-diffusion processes with asymmetric jump distributions.
 """
 
@@ -18,7 +18,7 @@ from .validation import ValidationExperiment
 # Make key classes available at package level
 __all__ = [
     "JumpDiffusionSimulator",
-    "JumpDiffusionEstimator", 
+    "JumpDiffusionEstimator",
     "JumpDiffusionModel",
     "ValidationExperiment",
 ]

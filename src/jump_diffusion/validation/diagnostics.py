@@ -14,15 +14,15 @@ from scipy import stats
 class ModelDiagnostics:
     """
     Diagnostic tools for jump-diffusion models.
-    
+
     This class provides various diagnostic tests and visualizations
     to assess model fit and parameter estimation quality.
     """
-    
+
     def __init__(self, data: np.ndarray, estimated_params: Dict[str, float], dt: float):
         """
         Initialize diagnostics with data and estimated parameters.
-        
+
         Parameters:
         -----------
         data : np.ndarray
@@ -36,16 +36,16 @@ class ModelDiagnostics:
         self.params = estimated_params
         self.dt = dt
         self.n_obs = len(self.data)
-    
+
     def ljung_box_test(self, lags: int = 10) -> Dict[str, float]:
         """
         Ljung-Box test for autocorrelation in residuals.
-        
+
         Parameters:
         -----------
         lags : int
             Number of lags to test
-            
+
         Returns:
         --------
         dict
@@ -54,7 +54,7 @@ class ModelDiagnostics:
         # Simple implementation of Ljung-Box test
         residuals = self.data - np.mean(self.data)
         n = len(residuals)
-        
+
         # Calculate autocorrelations
         autocorrs = []
         for lag in range(1, lags + 1):
@@ -63,25 +63,25 @@ class ModelDiagnostics:
                 autocorrs.append(autocorr if not np.isnan(autocorr) else 0)
             else:
                 autocorrs.append(0)
-        
+
         # Ljung-Box statistic
         autocorrs = np.array(autocorrs)
         lb_stat = n * (n + 2) * np.sum(autocorrs**2 / np.arange(n-1, n-lags-1, -1))
-        
+
         # Approximate p-value (chi-square distribution)
         p_value = 1 - stats.chi2.cdf(lb_stat, lags)
-        
+
         return {
             'statistic': lb_stat,
             'p_value': p_value,
             'lags': lags,
             'reject_independence': p_value < 0.05
         }
-    
+
     def normality_test(self) -> Dict[str, float]:
         """
         Test normality of standardized residuals.
-        
+
         Returns:
         --------
         dict
@@ -89,41 +89,41 @@ class ModelDiagnostics:
         """
         # Standardize residuals
         std_residuals = (self.data - np.mean(self.data)) / np.std(self.data)
-        
+
         # Shapiro-Wilk test
         statistic, p_value = stats.shapiro(std_residuals)
-        
+
         return {
             'statistic': statistic,
             'p_value': p_value,
             'reject_normality': p_value < 0.05
         }
-    
+
     def plot_diagnostics(self, figsize: tuple = (12, 8)) -> None:
         """
         Create diagnostic plots.
         """
         fig, axes = plt.subplots(2, 2, figsize=figsize)
-        
+
         # Time series plot
         axes[0,0].plot(self.data)
         axes[0,0].set_title('Time Series of Increments')
         axes[0,0].set_xlabel('Time')
         axes[0,0].set_ylabel('Increment')
         axes[0,0].grid(True, alpha=0.3)
-        
+
         # Histogram
         axes[0,1].hist(self.data, bins=30, density=True, alpha=0.7)
         axes[0,1].set_title('Distribution of Increments')
         axes[0,1].set_xlabel('Increment')
         axes[0,1].set_ylabel('Density')
         axes[0,1].grid(True, alpha=0.3)
-        
+
         # Q-Q plot
         stats.probplot(self.data, dist="norm", plot=axes[1,0])
         axes[1,0].set_title('Q-Q Plot vs Normal')
         axes[1,0].grid(True, alpha=0.3)
-        
+
         # Autocorrelation
         from statsmodels.tsa.stattools import acf
         try:
@@ -136,12 +136,12 @@ class ModelDiagnostics:
             axes[1,1].grid(True, alpha=0.3)
         except ImportError:
             # Fallback if statsmodels not available
-            axes[1,1].text(0.5, 0.5, 'Install statsmodels for ACF plot', 
+            axes[1,1].text(0.5, 0.5, 'Install statsmodels for ACF plot',
                           ha='center', va='center', transform=axes[1,1].transAxes)
-        
+
         plt.tight_layout()
         plt.show()
-    
+
     def summary_report(self) -> None:
         """
         Print a comprehensive diagnostic report.
@@ -149,21 +149,21 @@ class ModelDiagnostics:
         print("="*60)
         print("MODEL DIAGNOSTIC REPORT")
         print("="*60)
-        
+
         # Basic statistics
         print(f"Sample size: {self.n_obs}")
         print(f"Mean increment: {np.mean(self.data):.6f}")
         print(f"Std increment: {np.std(self.data):.6f}")
         print(f"Skewness: {stats.skew(self.data):.4f}")
         print(f"Kurtosis: {stats.kurtosis(self.data):.4f}")
-        
+
         # Ljung-Box test
         lb_result = self.ljung_box_test()
         print(f"\nLjung-Box Test (Independence):")
         print(f"  Statistic: {lb_result['statistic']:.4f}")
         print(f"  P-value: {lb_result['p_value']:.4f}")
         print(f"  Reject independence: {lb_result['reject_independence']}")
-        
+
         # Normality test
         norm_result = self.normality_test()
         print(f"\nShapiro-Wilk Test (Normality):")

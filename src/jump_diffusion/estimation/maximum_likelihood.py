@@ -16,15 +16,15 @@ from .base_estimator import BaseEstimator
 class JumpDiffusionEstimator(BaseEstimator):
     """
     Maximum likelihood estimator for jump-diffusion models.
-    
+
     This estimator handles jump-diffusion processes with asymmetric
     jump distributions using mixture likelihood functions.
     """
-    
+
     def __init__(self, data: np.ndarray, dt: float):
         """
         Initialize the estimator.
-        
+
         Parameters:
         -----------
         data : np.ndarray
@@ -38,33 +38,33 @@ class JumpDiffusionEstimator(BaseEstimator):
             self.increments = data
         else:
             raise ValueError("Data must be 1D array of increments")
-        
+
         super().__init__(self.increments, dt)
-        
+
         # Calculate basic statistics
         self.n_obs = len(self.increments)
         self.mean_increment = np.mean(self.increments)
         self.std_increment = np.std(self.increments)
         self.skewness = stats.skew(self.increments)
         self.kurtosis = stats.kurtosis(self.increments)
-    
+
     def _diffusion_density(self, x: np.ndarray, mu: float, sigma: float) -> np.ndarray:
         """Calculate pure diffusion density."""
         mean = mu * self.dt
         std = sigma * np.sqrt(self.dt)
         return norm.pdf(x, loc=mean, scale=std)
-    
-    def _jump_diffusion_density(self, x: np.ndarray, mu: float, sigma: float, 
+
+    def _jump_diffusion_density(self, x: np.ndarray, mu: float, sigma: float,
                                jump_scale: float, jump_skew: float) -> np.ndarray:
         """Calculate jump + diffusion density."""
         combined_mean = mu * self.dt
         combined_var = sigma**2 * self.dt + jump_scale**2
         combined_std = np.sqrt(combined_var)
         adjusted_skew = jump_skew * jump_scale / combined_std
-        
+
         return skewnorm.pdf(x, a=adjusted_skew, loc=combined_mean, scale=combined_std)
-    
-    def _mixture_density(self, x: np.ndarray, mu: float, sigma: float, 
+
+    def _mixture_density(self, x: np.ndarray, mu: float, sigma: float,
                         jump_prob: float, jump_scale: float, jump_skew: float) -> np.ndarray:
         """Calculate mixture density."""
         diffusion_component = (1 - jump_prob) * self._diffusion_density(x, mu, sigma)
@@ -72,40 +72,40 @@ class JumpDiffusionEstimator(BaseEstimator):
             x, mu, sigma, jump_scale, jump_skew
         )
         return diffusion_component + jump_component
-    
+
     def log_likelihood(self, params: np.ndarray) -> float:
         """
         Calculate negative log-likelihood for optimization.
-        
+
         Parameters:
         -----------
         params : np.ndarray
             Parameter vector [mu, sigma, jump_prob, jump_scale, jump_skew]
-            
+
         Returns:
         --------
         float
             Negative log-likelihood value
         """
         mu, sigma, jump_prob, jump_scale, jump_skew = params
-        
+
         # Parameter constraints
         if sigma <= 0 or jump_scale <= 0:
             return np.inf
         if jump_prob < 0 or jump_prob > 1:
             return np.inf
-        
+
         # Calculate densities
         densities = self._mixture_density(
             self.increments, mu, sigma, jump_prob, jump_scale, jump_skew
         )
-        
+
         # Numerical stability
         densities = np.maximum(densities, 1e-300)
-        
+
         # Return negative log-likelihood
         return -np.sum(np.log(densities))
-    
+
     def _get_initial_guess(self) -> List[float]:
         """Generate intelligent initial parameter guess."""
         initial_mu = self.mean_increment / self.dt
@@ -113,10 +113,10 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_jump_prob = 0.1
         initial_jump_scale = self.std_increment * 0.5
         initial_jump_skew = np.sign(self.skewness) * 2.0
-        
-        return [initial_mu, initial_sigma, initial_jump_prob, 
+
+        return [initial_mu, initial_sigma, initial_jump_prob,
                 initial_jump_scale, initial_jump_skew]
-    
+
     def _get_parameter_bounds(self) -> List[tuple]:
         """Get parameter bounds for optimization."""
         return [
@@ -126,12 +126,12 @@ class JumpDiffusionEstimator(BaseEstimator):
             (1e-6, None),      # jump_scale > 0
             (-10, 10)          # jump_skew
         ]
-    
-    def estimate(self, initial_guess: Optional[List[float]] = None, 
+
+    def estimate(self, initial_guess: Optional[List[float]] = None,
                 method: str = 'L-BFGS-B', **kwargs) -> Dict[str, Any]:
         """
         Estimate parameters using maximum likelihood.
-        
+
         Parameters:
         -----------
         initial_guess : list, optional
@@ -140,7 +140,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             Optimization method
         **kwargs : dict
             Additional arguments for optimizer
-            
+
         Returns:
         --------
         dict
@@ -148,9 +148,9 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         if initial_guess is None:
             initial_guess = self._get_initial_guess()
-        
+
         bounds = self._get_parameter_bounds()
-        
+
         # Optimization
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -161,10 +161,10 @@ class JumpDiffusionEstimator(BaseEstimator):
                 bounds=bounds,
                 options={'maxiter': 1000, 'ftol': 1e-9, **kwargs}
             )
-        
+
         # Process results
         mu_hat, sigma_hat, p_hat, omega_hat, alpha_hat = result.x
-        
+
         self.results = {
             'parameters': {
                 'mu': mu_hat,
@@ -186,18 +186,18 @@ class JumpDiffusionEstimator(BaseEstimator):
                 'kurtosis': self.kurtosis
             }
         }
-        
+
         self.fitted = True
         return self.results
-    
+
     def diagnostics(self) -> None:
         """Print diagnostic information about the estimation."""
         if not self.fitted:
             print("Model not fitted. Run estimate() first.")
             return
-        
+
         params = self.results['parameters']
-        
+
         print("="*60)
         print("JUMP-DIFFUSION ESTIMATION RESULTS")
         print("="*60)
@@ -210,14 +210,14 @@ class JumpDiffusionEstimator(BaseEstimator):
         print(f"AIC:                    {self.results['aic']:.2f}")
         print(f"BIC:                    {self.results['bic']:.2f}")
         print(f"Convergence:            {self.results['convergence']}")
-        
+
         # Model comparison with data
         print(f"\nDATA vs MODEL COMPARISON")
         print("-"*30)
         theoretical_mean = params['mu'] * self.dt
-        theoretical_var = (params['sigma']**2 * self.dt + 
+        theoretical_var = (params['sigma']**2 * self.dt +
                           params['jump_prob'] * params['jump_scale']**2)
-        
+
         print(f"Mean increment:")
         print(f"  Empirical:  {self.mean_increment:.6f}")
         print(f"  Theoretical: {theoretical_mean:.6f}")

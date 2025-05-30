@@ -1,7 +1,7 @@
 """
 Jump-Diffusion Model Definitions
 
-This module contains the mathematical models for various types of 
+This module contains the mathematical models for various types of
 jump-diffusion processes.
 """
 
