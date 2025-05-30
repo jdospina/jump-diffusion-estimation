@@ -1,7 +1,3 @@
-# ==========================================
-# tests/test_estimation/test_maximum_likelihood.py
-# ==========================================
-
 """
 Unit tests for maximum likelihood estimation.
 """
