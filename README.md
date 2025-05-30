@@ -1,7 +1,3 @@
-# ==========================================
-# README.md
-# ==========================================
-
 # Jump-Diffusion Parameter Estimation
 
 A comprehensive Python library for simulating and estimating parameters of jump-diffusion processes with asymmetric jump distributions.

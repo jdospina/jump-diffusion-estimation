@@ -1,7 +1,3 @@
-# ==========================================
-# CONTRIBUTING.md
-# ==========================================
-
 # Contributing to Jump-Diffusion Estimation
 
 We welcome contributions to the Jump-Diffusion Parameter Estimation library! This document provides guidelines for contributing to the project.
