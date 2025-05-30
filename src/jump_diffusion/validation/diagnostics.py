@@ -7,7 +7,8 @@ and their parameter estimates.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from typing import Dict, Any, Optional
+# from typing import Dict, Any, Optional
+from typing import Dict
 from scipy import stats
 
 class ModelDiagnostics:
