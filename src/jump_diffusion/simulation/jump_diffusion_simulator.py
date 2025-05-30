@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/simulation/jump_diffusion_simulator.py
-# ==========================================
-
 """
 Jump-Diffusion Simulator Implementation
 
