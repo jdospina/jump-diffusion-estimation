@@ -1,7 +1,3 @@
-# ==========================================
-# src/jump_diffusion/models/base_model.py
-# ==========================================
-
 """
 Base classes for stochastic process models.
 
