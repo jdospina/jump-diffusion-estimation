@@ -1,7 +1,3 @@
-# ==========================================
-# tests/test_models/test_jump_diffusion.py
-# ==========================================
-
 """
 Unit tests for jump-diffusion models.
 """
