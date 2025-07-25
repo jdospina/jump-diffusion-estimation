@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 import numpy as np
 
+
 class BaseSimulator(ABC):
     """
     Abstract base class for all simulators.
@@ -16,8 +17,13 @@ class BaseSimulator(ABC):
         self.parameters = kwargs
 
     @abstractmethod
-    def simulate_path(self, T: float, n_steps: int, x0: float = 1.0,
-                      seed: Optional[int] = None) -> Tuple[np.ndarray, ...]:
+    def simulate_path(
+        self,
+        T: float,
+        n_steps: int,
+        x0: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> Tuple[np.ndarray, ...]:
         """
         Simulate a single path.
 

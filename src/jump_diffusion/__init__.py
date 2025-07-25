@@ -23,10 +23,12 @@ __all__ = [
     "ValidationExperiment",
 ]
 
+
 # Version information
 def get_version():
     """Return the current version of the library."""
     return __version__
+
 
 def get_info():
     """Return basic information about the library."""
@@ -34,5 +36,5 @@ def get_info():
         "name": "jump-diffusion-estimation",
         "version": __version__,
         "author": __author__,
-        "description": "Jump-Diffusion Parameter Estimation Library"
+        "description": "Jump-Diffusion Parameter Estimation Library",
     }

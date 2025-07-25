@@ -13,6 +13,7 @@ from scipy.optimize import minimize
 from typing import Dict, Any, Optional, List
 from .base_estimator import BaseEstimator
 
+
 class JumpDiffusionEstimator(BaseEstimator):
     """
     Maximum likelihood estimator for jump-diffusion models.
@@ -38,7 +39,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         if data.ndim == 1:
             self.increments = data
         else:
-            raise ValueError("data must be a one-dimensional array of increments")
+            msg = "data must be a one-dimensional array of increments"
+            raise ValueError(msg)
 
         super().__init__(self.increments, dt)
 
@@ -49,26 +51,53 @@ class JumpDiffusionEstimator(BaseEstimator):
         self.skewness = stats.skew(self.increments)
         self.kurtosis = stats.kurtosis(self.increments)
 
-    def _diffusion_density(self, x: np.ndarray, mu: float, sigma: float) -> np.ndarray:
+    def _diffusion_density(
+        self,
+        x: np.ndarray,
+        mu: float,
+        sigma: float,
+    ) -> np.ndarray:
         """Calculate pure diffusion density."""
         mean = mu * self.dt
         std = sigma * np.sqrt(self.dt)
         return norm.pdf(x, loc=mean, scale=std)
 
-    def _jump_diffusion_density(self, x: np.ndarray, mu: float, sigma: float,
-                               jump_scale: float, jump_skew: float) -> np.ndarray:
+    def _jump_diffusion_density(
+        self,
+        x: np.ndarray,
+        mu: float,
+        sigma: float,
+        jump_scale: float,
+        jump_skew: float,
+    ) -> np.ndarray:
         """Calculate jump + diffusion density."""
         combined_mean = mu * self.dt
         combined_var = sigma**2 * self.dt + jump_scale**2
         combined_std = np.sqrt(combined_var)
         adjusted_skew = jump_skew * jump_scale / combined_std
 
-        return skewnorm.pdf(x, a=adjusted_skew, loc=combined_mean, scale=combined_std)
+        return skewnorm.pdf(
+            x,
+            a=adjusted_skew,
+            loc=combined_mean,
+            scale=combined_std,
+        )
 
-    def _mixture_density(self, x: np.ndarray, mu: float, sigma: float,
-                        jump_prob: float, jump_scale: float, jump_skew: float) -> np.ndarray:
+    def _mixture_density(
+        self,
+        x: np.ndarray,
+        mu: float,
+        sigma: float,
+        jump_prob: float,
+        jump_scale: float,
+        jump_skew: float,
+    ) -> np.ndarray:
         """Calculate mixture density."""
-        diffusion_component = (1 - jump_prob) * self._diffusion_density(x, mu, sigma)
+        diffusion_component = (1 - jump_prob) * self._diffusion_density(
+            x,
+            mu,
+            sigma,
+        )
         jump_component = jump_prob * self._jump_diffusion_density(
             x, mu, sigma, jump_scale, jump_skew
         )
@@ -115,21 +144,30 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_jump_scale = self.std_increment * 0.5
         initial_jump_skew = np.sign(self.skewness) * 2.0
 
-        return [initial_mu, initial_sigma, initial_jump_prob,
-                initial_jump_scale, initial_jump_skew]
+        return [
+            initial_mu,
+            initial_sigma,
+            initial_jump_prob,
+            initial_jump_scale,
+            initial_jump_skew,
+        ]
 
     def _get_parameter_bounds(self) -> List[tuple]:
         """Get parameter bounds for optimization."""
         return [
-            (None, None),      # mu
-            (1e-6, None),      # sigma > 0
-            (1e-6, 1-1e-6),    # 0 < jump_prob < 1
-            (1e-6, None),      # jump_scale > 0
-            (-10, 10)          # jump_skew
+            (None, None),  # mu
+            (1e-6, None),  # sigma > 0
+            (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
+            (1e-6, None),  # jump_scale > 0
+            (-10, 10),  # jump_skew
         ]
 
-    def estimate(self, initial_guess: Optional[List[float]] = None,
-                method: str = 'L-BFGS-B', **kwargs) -> Dict[str, Any]:
+    def estimate(
+        self,
+        initial_guess: Optional[List[float]] = None,
+        method: str = "L-BFGS-B",
+        **kwargs,
+    ) -> Dict[str, Any]:
         """
         Estimate parameters using maximum likelihood.
 
@@ -160,32 +198,32 @@ class JumpDiffusionEstimator(BaseEstimator):
                 initial_guess,
                 method=method,
                 bounds=bounds,
-                options={'maxiter': 1000, 'ftol': 1e-9, **kwargs}
+                options={"maxiter": 1000, "ftol": 1e-9, **kwargs},
             )
 
         # Process results
         mu_hat, sigma_hat, p_hat, omega_hat, alpha_hat = result.x
 
         self.results = {
-            'parameters': {
-                'mu': mu_hat,
-                'sigma': sigma_hat,
-                'jump_prob': p_hat,
-                'jump_scale': omega_hat,
-                'jump_skew': alpha_hat
+            "parameters": {
+                "mu": mu_hat,
+                "sigma": sigma_hat,
+                "jump_prob": p_hat,
+                "jump_scale": omega_hat,
+                "jump_skew": alpha_hat,
             },
-            'log_likelihood': -result.fun,
-            'aic': 2 * len(result.x) + 2 * result.fun,
-            'bic': len(result.x) * np.log(self.n_obs) + 2 * result.fun,
-            'optimization_result': result,
-            'convergence': result.success,
-            'data_stats': {
-                'n_obs': self.n_obs,
-                'mean_increment': self.mean_increment,
-                'std_increment': self.std_increment,
-                'skewness': self.skewness,
-                'kurtosis': self.kurtosis
-            }
+            "log_likelihood": -result.fun,
+            "aic": 2 * len(result.x) + 2 * result.fun,
+            "bic": len(result.x) * np.log(self.n_obs) + 2 * result.fun,
+            "optimization_result": result,
+            "convergence": result.success,
+            "data_stats": {
+                "n_obs": self.n_obs,
+                "mean_increment": self.mean_increment,
+                "std_increment": self.std_increment,
+                "skewness": self.skewness,
+                "kurtosis": self.kurtosis,
+            },
         }
 
         self.fitted = True
@@ -197,32 +235,36 @@ class JumpDiffusionEstimator(BaseEstimator):
             print("Model not fitted. Run estimate() first.")
             return
 
-        params = self.results['parameters']
+        params = self.results["parameters"]
 
-        print("="*60)
+        print("=" * 60)
         print("JUMP-DIFFUSION ESTIMATION RESULTS")
-        print("="*60)
+        print("=" * 60)
         print(f"Drift (μ):              {params['mu']:.6f}")
         print(f"Volatility (σ):         {params['sigma']:.6f}")
         print(f"Jump probability (p):   {params['jump_prob']:.6f}")
         print(f"Jump scale (ω):         {params['jump_scale']:.6f}")
         print(f"Jump skewness (α):      {params['jump_skew']:.6f}")
-        print(f"\nLog-likelihood:         {self.results['log_likelihood']:.2f}")
+        print(
+            f"\nLog-likelihood:         {self.results['log_likelihood']:.2f}",
+        )
         print(f"AIC:                    {self.results['aic']:.2f}")
         print(f"BIC:                    {self.results['bic']:.2f}")
         print(f"Convergence:            {self.results['convergence']}")
 
         # Model comparison with data
-        print(f"\nDATA vs MODEL COMPARISON")
-        print("-"*30)
-        theoretical_mean = params['mu'] * self.dt
-        theoretical_var = (params['sigma']**2 * self.dt +
-                          params['jump_prob'] * params['jump_scale']**2)
+        print("\nDATA vs MODEL COMPARISON")
+        print("-" * 30)
+        theoretical_mean = params["mu"] * self.dt
+        theoretical_var = (
+            params["sigma"] ** 2 * self.dt
+            + params["jump_prob"] * params["jump_scale"] ** 2
+        )
 
-        print(f"Mean increment:")
+        print("Mean increment:")
         print(f"  Empirical:  {self.mean_increment:.6f}")
         print(f"  Theoretical: {theoretical_mean:.6f}")
-        print(f"Std deviation:")
+        print("Std deviation:")
         print(f"  Empirical:  {self.std_increment:.6f}")
         print(f"  Theoretical: {np.sqrt(theoretical_var):.6f}")
         print(f"Expected jumps: {params['jump_prob'] * self.n_obs:.1f}")

@@ -10,9 +10,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run jump-diffusion validation experiment"
     )
-    parser.add_argument("--n_sims", type=int, default=10, help="Number of simulations")
+    parser.add_argument(
+        "--n_sims",
+        type=int,
+        default=10,
+        help="Number of simulations",
+    )
     parser.add_argument("--T", type=float, default=1.0, help="Time horizon")
-    parser.add_argument("--n_steps", type=int, default=252, help="Number of time steps")
+    parser.add_argument(
+        "--n_steps",
+        type=int,
+        default=252,
+        help="Number of time steps",
+    )
     parser.add_argument("--output", type=str, help="Output file for results")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
 

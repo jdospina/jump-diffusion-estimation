@@ -11,6 +11,7 @@ from scipy.stats import skewnorm
 from typing import Optional, Tuple
 from .base_simulator import BaseSimulator
 
+
 class JumpDiffusionSimulator(BaseSimulator):
     """
     Simulator for jump-diffusion processes with asymmetric jumps.
@@ -19,9 +20,14 @@ class JumpDiffusionSimulator(BaseSimulator):
     and integrate with the new modular architecture.
     """
 
-    def __init__(self, mu: float = 0.05, sigma: float = 0.2,
-                 jump_prob: float = 0.1, jump_scale: float = 0.3,
-                 jump_skew: float = 2.0):
+    def __init__(
+        self,
+        mu: float = 0.05,
+        sigma: float = 0.2,
+        jump_prob: float = 0.1,
+        jump_scale: float = 0.3,
+        jump_skew: float = 2.0,
+    ):
         """
         Initialize the jump-diffusion simulator.
 
@@ -39,8 +45,11 @@ class JumpDiffusionSimulator(BaseSimulator):
             Skewness parameter for jumps
         """
         super().__init__(
-            mu=mu, sigma=sigma, jump_prob=jump_prob,
-            jump_scale=jump_scale, jump_skew=jump_skew
+            mu=mu,
+            sigma=sigma,
+            jump_prob=jump_prob,
+            jump_scale=jump_scale,
+            jump_skew=jump_skew,
         )
 
         # Store last simulation results
@@ -48,7 +57,9 @@ class JumpDiffusionSimulator(BaseSimulator):
         self.last_jumps = None
         self.last_jump_times = None
 
-    def generate_jump_component(self, n_steps: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def generate_jump_component(
+        self, n_steps: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Generate jump components for simulation.
 
@@ -58,14 +69,18 @@ class JumpDiffusionSimulator(BaseSimulator):
             (actual_jumps, jump_indicators, jump_times)
         """
         # Bernoulli process for jump timing
-        jump_indicators = np.random.binomial(1, self.parameters['jump_prob'], n_steps)
+        jump_indicators = np.random.binomial(
+            1,
+            self.parameters["jump_prob"],
+            n_steps,
+        )
 
         # Jump magnitudes from skew-normal distribution
         all_jump_sizes = skewnorm.rvs(
-            a=self.parameters['jump_skew'],
+            a=self.parameters["jump_skew"],
             loc=0,
-            scale=self.parameters['jump_scale'],
-            size=n_steps
+            scale=self.parameters["jump_scale"],
+            size=n_steps,
         )
 
         # Actual jumps (zero when no jump occurs)
@@ -74,8 +89,13 @@ class JumpDiffusionSimulator(BaseSimulator):
 
         return actual_jumps, jump_indicators, jump_times
 
-    def simulate_path(self, T: float = 1.0, n_steps: int = 252,
-                      x0: float = 1.0, seed: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def simulate_path(
+        self,
+        T: float = 1.0,
+        n_steps: int = 252,
+        x0: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Simulate a complete jump-diffusion path.
 
@@ -105,12 +125,17 @@ class JumpDiffusionSimulator(BaseSimulator):
 
         # Generate all random components
         diffusion_innovations = np.random.normal(0, 1, n_steps)
-        jump_components, jump_indicators, jump_times = self.generate_jump_component(n_steps)
+        (
+            jump_components,
+            jump_indicators,
+            jump_times,
+        ) = self.generate_jump_component(n_steps)
 
         # Build path step by step
         for i in range(n_steps):
-            drift_term = self.parameters['mu'] * dt
-            diffusion_term = self.parameters['sigma'] * np.sqrt(dt) * diffusion_innovations[i]
+            drift_term = self.parameters["mu"] * dt
+            sigma_dt = self.parameters["sigma"] * np.sqrt(dt)
+            diffusion_term = sigma_dt * diffusion_innovations[i]
             jump_term = jump_components[i]
 
             increment = drift_term + diffusion_term + jump_term
@@ -123,13 +148,21 @@ class JumpDiffusionSimulator(BaseSimulator):
 
         return times, path, jump_components
 
-    def plot_simulation(self, times=None, path=None, jumps=None, figsize=(12, 8)):
+    def plot_simulation(
+        self,
+        times=None,
+        path=None,
+        jumps=None,
+        figsize=(12, 8),
+    ):
         """
         Plot simulation results with comprehensive diagnostics.
         """
         if times is None or path is None:
             if self.last_path is None:
-                raise ValueError("No simulation data available. Run simulate_path() first.")
+                raise ValueError(
+                    "No simulation data available. Run simulate_path() first."
+                )
             times = np.linspace(0, 1, len(self.last_path))
             path = self.last_path
             jumps = self.last_jumps
@@ -137,50 +170,81 @@ class JumpDiffusionSimulator(BaseSimulator):
         fig, axes = plt.subplots(2, 2, figsize=figsize)
 
         # Main trajectory plot
-        axes[0,0].plot(times, path, 'b-', linewidth=1.5, alpha=0.8)
+        axes[0, 0].plot(times, path, "b-", linewidth=1.5, alpha=0.8)
         if len(self.last_jump_times) > 0:
-            axes[0,0].scatter(times[1:][self.last_jump_times],
-                             path[1:][self.last_jump_times],
-                             color='red', s=30, alpha=0.7, zorder=5)
-        axes[0,0].set_title('Jump-Diffusion Path')
-        axes[0,0].set_xlabel('Time')
-        axes[0,0].set_ylabel('X(t)')
-        axes[0,0].grid(True, alpha=0.3)
+            axes[0, 0].scatter(
+                times[1:][self.last_jump_times],
+                path[1:][self.last_jump_times],
+                color="red",
+                s=30,
+                alpha=0.7,
+                zorder=5,
+            )
+        axes[0, 0].set_title("Jump-Diffusion Path")
+        axes[0, 0].set_xlabel("Time")
+        axes[0, 0].set_ylabel("X(t)")
+        axes[0, 0].grid(True, alpha=0.3)
 
         # Jump magnitudes
         if len(self.last_jump_times) > 0:
             jump_magnitudes = jumps[self.last_jump_times]
-            axes[0,1].stem(self.last_jump_times, jump_magnitudes, basefmt=' ')
-            axes[0,1].set_title(f'Detected Jumps (Total: {len(self.last_jump_times)})')
+            axes[0, 1].stem(self.last_jump_times, jump_magnitudes, basefmt=" ")
+            axes[0, 1].set_title(
+                f"Detected Jumps (Total: {len(self.last_jump_times)})",
+            )
         else:
-            axes[0,1].text(0.5, 0.5, 'No jumps detected',
-                          ha='center', va='center', transform=axes[0,1].transAxes)
-            axes[0,1].set_title('Detected Jumps (Total: 0)')
-        axes[0,1].set_xlabel('Time Index')
-        axes[0,1].set_ylabel('Jump Magnitude')
-        axes[0,1].grid(True, alpha=0.3)
+            axes[0, 1].text(
+                0.5,
+                0.5,
+                "No jumps detected",
+                ha="center",
+                va="center",
+                transform=axes[0, 1].transAxes,
+            )
+            axes[0, 1].set_title("Detected Jumps (Total: 0)")
+        axes[0, 1].set_xlabel("Time Index")
+        axes[0, 1].set_ylabel("Jump Magnitude")
+        axes[0, 1].grid(True, alpha=0.3)
 
         # Increment distribution
         increments = np.diff(path)
-        axes[1,0].hist(increments, bins=50, density=True, alpha=0.7,
-                      color='skyblue', edgecolor='black')
-        axes[1,0].set_title('Distribution of Increments')
-        axes[1,0].set_xlabel('ΔX')
-        axes[1,0].set_ylabel('Density')
-        axes[1,0].grid(True, alpha=0.3)
+        axes[1, 0].hist(
+            increments,
+            bins=50,
+            density=True,
+            alpha=0.7,
+            color="skyblue",
+            edgecolor="black",
+        )
+        axes[1, 0].set_title("Distribution of Increments")
+        axes[1, 0].set_xlabel("ΔX")
+        axes[1, 0].set_ylabel("Density")
+        axes[1, 0].grid(True, alpha=0.3)
 
         # Jump size distribution
         if len(self.last_jump_times) > 0:
             actual_jumps = jumps[jumps != 0]
-            axes[1,1].hist(actual_jumps, bins=20, density=True, alpha=0.7,
-                          color='orange', edgecolor='black')
-            axes[1,1].set_title('Jump Size Distribution')
+            axes[1, 1].hist(
+                actual_jumps,
+                bins=20,
+                density=True,
+                alpha=0.7,
+                color="orange",
+                edgecolor="black",
+            )
+            axes[1, 1].set_title("Jump Size Distribution")
         else:
-            axes[1,1].text(0.5, 0.5, 'No jumps to analyze',
-                          ha='center', va='center', transform=axes[1,1].transAxes)
-        axes[1,1].set_xlabel('Jump Size')
-        axes[1,1].set_ylabel('Density')
-        axes[1,1].grid(True, alpha=0.3)
+            axes[1, 1].text(
+                0.5,
+                0.5,
+                "No jumps to analyze",
+                ha="center",
+                va="center",
+                transform=axes[1, 1].transAxes,
+            )
+        axes[1, 1].set_xlabel("Jump Size")
+        axes[1, 1].set_ylabel("Density")
+        axes[1, 1].grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.show()
