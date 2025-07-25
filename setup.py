@@ -58,8 +58,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "jump-diffusion-validate=jump_diffusion.scripts.validate:main",
-            "jump-diffusion-benchmark=jump_diffusion.scripts.benchmark:main",
+            "jumpdiff-validate=jump_diffusion.scripts.validate:main",
+            "jumpdiff-benchmark=jump_diffusion.scripts.benchmark:main",
         ],
     },
     include_package_data=True,
