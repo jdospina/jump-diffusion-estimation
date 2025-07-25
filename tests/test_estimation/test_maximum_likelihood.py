@@ -5,6 +5,7 @@ Unit tests for maximum likelihood estimation.
 import numpy as np
 import pytest
 from jump_diffusion.estimation import JumpDiffusionEstimator
+from jump_diffusion.simulation import JumpDiffusionSimulator
 
 class TestJumpDiffusionEstimator:
     """Test suite for JumpDiffusionEstimator class."""
@@ -46,3 +47,17 @@ class TestJumpDiffusionEstimator:
         self.estimator.estimate()
         # This should not raise an exception
         self.estimator.diagnostics()
+
+    def test_estimation_on_simulated_path(self):
+        """Estimate parameters from a simulated jump-diffusion path."""
+        sim = JumpDiffusionSimulator(
+            mu=0.02, sigma=0.1, jump_prob=0.05, jump_scale=0.2, jump_skew=0.0
+        )
+        _, path, _ = sim.simulate_path(T=1.0, n_steps=10000, x0=0.0, seed=42)
+        increments = np.diff(path)
+        estimator = JumpDiffusionEstimator(increments, 1/10000)
+        results = estimator.estimate()
+
+        params = results["parameters"]
+        assert np.isclose(params["mu"], 0.02, atol=0.02)
+        assert np.isclose(params["sigma"], 0.1, atol=0.02)
