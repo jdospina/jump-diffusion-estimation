@@ -18,7 +18,8 @@ class JumpDiffusionEstimator(BaseEstimator):
     Maximum likelihood estimator for jump-diffusion models.
 
     This estimator handles jump-diffusion processes with asymmetric
-    jump distributions using mixture likelihood functions.
+    jump distributions using mixture likelihood functions. The input
+    ``data`` must be a one-dimensional array of increments.
     """
 
     def __init__(self, data: np.ndarray, dt: float):
@@ -28,16 +29,16 @@ class JumpDiffusionEstimator(BaseEstimator):
         Parameters:
         -----------
         data : np.ndarray
-            Observed increments or path
+            One-dimensional array of observed increments. If you have
+            a path, compute ``np.diff(path)`` first.
         dt : float
-            Time step size
+            Time step size between consecutive increments.
         """
-        # Handle both paths and increments
-        if data.ndim == 1 and len(data) > 1:
-            # Assume it's increments if 1D, otherwise convert path to increments
+        # Accept only 1D arrays of increments
+        if data.ndim == 1:
             self.increments = data
         else:
-            raise ValueError("Data must be 1D array of increments")
+            raise ValueError("data must be a one-dimensional array of increments")
 
         super().__init__(self.increments, dt)
 

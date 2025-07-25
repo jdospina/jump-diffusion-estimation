@@ -18,7 +18,7 @@ class BaseEstimator(ABC):
         Parameters:
         -----------
         data : np.ndarray
-            Observed data (increments or path)
+            One-dimensional array of observed increments
         dt : float
             Time step size
         """

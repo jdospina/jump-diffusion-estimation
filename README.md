@@ -58,7 +58,9 @@ simulator = JumpDiffusionSimulator(
 times, path, jumps = simulator.simulate_path(T=1.0, n_steps=252)
 
 # Estimate parameters
-estimator = JumpDiffusionEstimator(path, times)
+increments = np.diff(path)
+dt = times[1] - times[0]
+estimator = JumpDiffusionEstimator(increments, dt)
 results = estimator.estimate()
 
 print(f"Estimated drift: {results.mu:.4f}")
