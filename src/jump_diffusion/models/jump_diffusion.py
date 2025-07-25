@@ -1,13 +1,15 @@
 """
 Jump-Diffusion Model Implementation
 
-This module implements the jump-diffusion model with asymmetric jump distributions.
+This module implements the jump-diffusion model with asymmetric jump
+distributions.
 """
 
 import numpy as np
 from scipy.stats import norm, skewnorm
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple
 from .base_model import BaseStochasticModel
+
 
 class JumpDiffusionModel(BaseStochasticModel):
     """
@@ -20,9 +22,14 @@ class JumpDiffusionModel(BaseStochasticModel):
     approximated by Bernoulli trials.
     """
 
-    def __init__(self, mu: float = 0.05, sigma: float = 0.2,
-                 jump_prob: float = 0.1, jump_scale: float = 0.15,
-                 jump_skew: float = 0.0):
+    def __init__(
+        self,
+        mu: float = 0.05,
+        sigma: float = 0.2,
+        jump_prob: float = 0.1,
+        jump_scale: float = 0.15,
+        jump_skew: float = 0.0,
+    ):
         """
         Initialize the jump-diffusion model.
 
@@ -40,12 +47,20 @@ class JumpDiffusionModel(BaseStochasticModel):
             Skewness parameter for jump distribution
         """
         super().__init__(
-            mu=mu, sigma=sigma, jump_prob=jump_prob,
-            jump_scale=jump_scale, jump_skew=jump_skew
+            mu=mu,
+            sigma=sigma,
+            jump_prob=jump_prob,
+            jump_scale=jump_scale,
+            jump_skew=jump_skew,
         )
 
-    def simulate(self, T: float, n_steps: int, x0: float = 1.0,
-                 seed: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def simulate(
+        self,
+        T: float,
+        n_steps: int,
+        x0: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Simulate a jump-diffusion path.
 
@@ -64,18 +79,23 @@ class JumpDiffusionModel(BaseStochasticModel):
 
         # Generate innovations
         brownian_innovations = np.random.normal(0, 1, n_steps)
-        jump_indicators = np.random.binomial(1, self.parameters['jump_prob'], n_steps)
+        jump_indicators = np.random.binomial(
+            1,
+            self.parameters["jump_prob"],
+            n_steps,
+        )
         jump_sizes = skewnorm.rvs(
-            a=self.parameters['jump_skew'],
+            a=self.parameters["jump_skew"],
             loc=0,
-            scale=self.parameters['jump_scale'],
-            size=n_steps
+            scale=self.parameters["jump_scale"],
+            size=n_steps,
         )
 
         # Construct path
         for i in range(n_steps):
-            drift = self.parameters['mu'] * dt
-            diffusion = self.parameters['sigma'] * np.sqrt(dt) * brownian_innovations[i]
+            drift = self.parameters["mu"] * dt
+            sigma_term = self.parameters["sigma"] * np.sqrt(dt)
+            diffusion = sigma_term * brownian_innovations[i]
             jump = jump_indicators[i] * jump_sizes[i]
 
             path[i + 1] = path[i] + drift + diffusion + jump
@@ -100,16 +120,20 @@ class JumpDiffusionModel(BaseStochasticModel):
         """
         Calculate mixture density for each increment.
         """
-        mu = self.parameters['mu']
-        sigma = self.parameters['sigma']
-        p = self.parameters['jump_prob']
-        omega = self.parameters['jump_scale']
-        alpha = self.parameters['jump_skew']
+        mu = self.parameters["mu"]
+        sigma = self.parameters["sigma"]
+        p = self.parameters["jump_prob"]
+        omega = self.parameters["jump_scale"]
+        alpha = self.parameters["jump_skew"]
 
         # Pure diffusion component
         diffusion_mean = mu * dt
         diffusion_std = sigma * np.sqrt(dt)
-        diffusion_density = norm.pdf(x, loc=diffusion_mean, scale=diffusion_std)
+        diffusion_density = norm.pdf(
+            x,
+            loc=diffusion_mean,
+            scale=diffusion_std,
+        )
 
         # Jump + diffusion component
         combined_mean = mu * dt
@@ -127,9 +151,9 @@ class JumpDiffusionModel(BaseStochasticModel):
     def get_parameter_bounds(self) -> list:
         """Get parameter bounds for optimization."""
         return [
-            (None, None),      # mu
-            (1e-6, None),      # sigma > 0
-            (1e-6, 1-1e-6),    # 0 < jump_prob < 1
-            (1e-6, None),      # jump_scale > 0
-            (-10, 10)          # jump_skew bounded for stability
+            (None, None),  # mu
+            (1e-6, None),  # sigma > 0
+            (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
+            (1e-6, None),  # jump_scale > 0
+            (-10, 10),  # jump_skew bounded for stability
         ]

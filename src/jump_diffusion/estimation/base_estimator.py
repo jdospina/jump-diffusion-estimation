@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import numpy as np
 
+
 class BaseEstimator(ABC):
     """
     Abstract base class for all parameter estimators.

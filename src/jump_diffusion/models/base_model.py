@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import numpy as np
 
+
 class BaseStochasticModel(ABC):
     """
     Abstract base class for all stochastic process models.
@@ -23,8 +24,13 @@ class BaseStochasticModel(ABC):
         self.fitted = False
 
     @abstractmethod
-    def simulate(self, T: float, n_steps: int, x0: float = 1.0,
-                 seed: Optional[int] = None) -> tuple:
+    def simulate(
+        self,
+        T: float,
+        n_steps: int,
+        x0: float = 1.0,
+        seed: Optional[int] = None,
+    ) -> tuple:
         """
         Simulate a path from the stochastic process.
 
