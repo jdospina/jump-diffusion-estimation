@@ -93,5 +93,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by classical jump-diffusion literature
 - Built with love for the quantitative finance community
 - Special thanks to contributors and users
-
----
