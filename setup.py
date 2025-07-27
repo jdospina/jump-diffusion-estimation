@@ -48,6 +48,8 @@ setup(
             "jupyter",
             "sphinx",
             "sphinx-rtd-theme",
+            "pandas-stubs",
+            "scipy-stubs",
         ],
         "tutorials": [
             "jupyter",
