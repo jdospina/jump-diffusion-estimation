@@ -44,7 +44,7 @@ class ModelDiagnostics:
         self.dt = dt
         self.n_obs = len(self.data)
 
-    def ljung_box_test(self, lags: int = 10) -> Dict[str, float]:
+    def ljung_box_test(self, lags: int = 10) -> Dict[str, float | int | bool]:
         """
         Ljung-Box test for autocorrelation in residuals.
 
@@ -86,7 +86,7 @@ class ModelDiagnostics:
             "reject_independence": p_value < 0.05,
         }
 
-    def normality_test(self) -> Dict[str, float]:
+    def normality_test(self) -> Dict[str, float | bool]:
         """
         Test normality of standardized residuals.
 

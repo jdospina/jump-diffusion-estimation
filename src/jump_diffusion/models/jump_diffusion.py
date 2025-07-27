@@ -7,7 +7,7 @@ distributions.
 
 import numpy as np
 from scipy.stats import norm, skewnorm
-from typing import Optional, Tuple
+from typing import Optional, Tuple, cast
 from .base_model import BaseStochasticModel
 
 
@@ -84,11 +84,14 @@ class JumpDiffusionModel(BaseStochasticModel):
             self.parameters["jump_prob"],
             n_steps,
         )
-        jump_sizes = skewnorm.rvs(
-            a=self.parameters["jump_skew"],
-            loc=0,
-            scale=self.parameters["jump_scale"],
-            size=n_steps,
+        jump_sizes = cast(
+            np.ndarray,
+            skewnorm.rvs(
+                a=self.parameters["jump_skew"],
+                loc=0,
+                scale=self.parameters["jump_scale"],
+                size=n_steps,
+            ),
         )
 
         # Construct path

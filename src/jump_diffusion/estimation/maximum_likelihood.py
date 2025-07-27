@@ -142,7 +142,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_sigma = self.std_increment / np.sqrt(self.dt)
         initial_jump_prob = 0.1
         initial_jump_scale = self.std_increment * 0.5
-        initial_jump_skew = np.sign(self.skewness) * 2.0
+        initial_jump_skew = float(np.sign(self.skewness)) * 2.0
 
         return [
             initial_mu,
@@ -152,7 +152,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             initial_jump_skew,
         ]
 
-    def _get_parameter_bounds(self) -> List[tuple]:
+    def _get_parameter_bounds(self) -> List[tuple[Optional[float], Optional[float]]]:
         """Get parameter bounds for optimization."""
         return [
             (None, None),  # mu
