@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # from typing import Dict, Any, Optional
-from typing import Dict
+from typing import Dict, List
 from scipy import stats
 
 
@@ -63,7 +63,7 @@ class ModelDiagnostics:
         n = len(residuals)
 
         # Calculate autocorrelations
-        autocorrs = []
+        autocorrs: List[float] = []
         for lag in range(1, lags + 1):
             if lag < n:
                 autocorr = np.corrcoef(residuals[:-lag], residuals[lag:])[0, 1]
@@ -72,9 +72,9 @@ class ModelDiagnostics:
                 autocorrs.append(0)
 
         # Ljung-Box statistic
-        autocorrs = np.array(autocorrs)
+        autocorr_array = np.array(autocorrs)
         denom = np.arange(n - 1, n - lags - 1, -1)
-        lb_stat = n * (n + 2) * np.sum(autocorrs**2 / denom)
+        lb_stat = n * (n + 2) * np.sum(autocorr_array**2 / denom)
 
         # Approximate p-value (chi-square distribution)
         p_value = 1 - stats.chi2.cdf(lb_stat, lags)
