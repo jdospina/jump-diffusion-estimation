@@ -204,7 +204,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         # Process results
         mu_hat, sigma_hat, p_hat, omega_hat, alpha_hat = result.x
 
-        self.results = {
+        results: Dict[str, Any] = {
             "parameters": {
                 "mu": mu_hat,
                 "sigma": sigma_hat,
@@ -226,12 +226,13 @@ class JumpDiffusionEstimator(BaseEstimator):
             },
         }
 
+        self.results = results
         self.fitted = True
-        return self.results
+        return results
 
     def diagnostics(self) -> None:
         """Print diagnostic information about the estimation."""
-        if not self.fitted:
+        if not self.fitted or self.results is None:
             print("Model not fitted. Run estimate() first.")
             return
 

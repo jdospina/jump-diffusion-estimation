@@ -8,7 +8,7 @@ controlled experiments with known parameters.
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Dict, Any
+from typing import Dict, Any, List
 from ..simulation import JumpDiffusionSimulator
 from ..estimation import JumpDiffusionEstimator
 
@@ -32,7 +32,7 @@ class ValidationExperiment:
             True parameter values to use for simulation
         """
         self.true_params = true_params
-        self.results = []
+        self.results: pd.DataFrame = pd.DataFrame()
         self.completed_experiments = 0
 
     def run_experiment(
@@ -70,7 +70,7 @@ class ValidationExperiment:
         # Create simulator
         simulator = JumpDiffusionSimulator(**self.true_params)
 
-        results = []
+        results: List[Dict[str, Any]] = []
         successful_runs = 0
 
         for i in range(n_simulations):

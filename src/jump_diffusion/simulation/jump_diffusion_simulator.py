@@ -53,9 +53,9 @@ class JumpDiffusionSimulator(BaseSimulator):
         )
 
         # Store last simulation results
-        self.last_path = None
-        self.last_jumps = None
-        self.last_jump_times = None
+        self.last_path: Optional[np.ndarray] = None
+        self.last_jumps: Optional[np.ndarray] = None
+        self.last_jump_times: Optional[np.ndarray] = None
 
     def generate_jump_component(
         self, n_steps: int

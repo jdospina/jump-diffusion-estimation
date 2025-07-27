@@ -26,7 +26,7 @@ class BaseEstimator(ABC):
         self.data = data
         self.dt = dt
         self.fitted = False
-        self.results = None
+        self.results: Optional[Dict[str, Any]] = None
 
     @abstractmethod
     def estimate(self, **kwargs) -> Dict[str, Any]:
