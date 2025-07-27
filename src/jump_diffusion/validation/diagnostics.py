@@ -86,7 +86,7 @@ class ModelDiagnostics:
             "reject_independence": p_value < 0.05,
         }
 
-    def normality_test(self) -> Dict[str, float | bool]:
+    def normality_test(self) -> Dict[str, Union[float, bool]]:
         """
         Test normality of standardized residuals.
 
