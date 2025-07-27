@@ -10,7 +10,7 @@ import warnings
 from scipy import stats
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from .base_estimator import BaseEstimator
 
 
@@ -152,7 +152,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             initial_jump_skew,
         ]
 
-    def _get_parameter_bounds(self) -> List[tuple[Optional[float], Optional[float]]]:
+    def _get_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
         """Get parameter bounds for optimization."""
         return [
             (None, None),  # mu
