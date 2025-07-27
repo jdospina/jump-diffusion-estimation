@@ -157,7 +157,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         return [
             (None, None),  # mu
             (1e-6, None),  # sigma > 0
-            (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
+            (1e-6, 1 - 1e-6),  # 0<jump_prob<1
             (1e-6, None),  # jump_scale > 0
             (-10, 10),  # jump_skew
         ]
