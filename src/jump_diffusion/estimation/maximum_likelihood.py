@@ -189,6 +189,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         if initial_guess is None:
             initial_guess = self._get_initial_guess()
+        initial_guess = np.asarray(initial_guess)
 
         bounds = self._get_parameter_bounds()
 
