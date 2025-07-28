@@ -104,7 +104,7 @@ class ModelDiagnostics:
         return {
             "statistic": statistic,
             "p_value": p_value,
-            "reject_normality": p_value < 0.05,
+            "reject_normality": bool(p_value < 0.05),
         }
 
     def plot_diagnostics(self, figsize: tuple = (12, 8)) -> None:
