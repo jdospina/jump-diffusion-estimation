@@ -136,7 +136,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         # Return negative log-likelihood
         return -np.sum(np.log(densities))
 
-    def _get_initial_guess(self) -> List[float]:
+    def _get_initial_guess(self) -> np.ndarray:
         """Generate intelligent initial parameter guess."""
         initial_mu = self.mean_increment / self.dt
         initial_sigma = self.std_increment / np.sqrt(self.dt)
