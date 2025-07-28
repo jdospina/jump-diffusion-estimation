@@ -152,7 +152,9 @@ class JumpDiffusionEstimator(BaseEstimator):
             initial_jump_skew,
         ]
 
-    def _get_parameter_bounds(self) -> List[Tuple[Optional[float], Optional[float]]]:
+    def _get_parameter_bounds(
+        self,
+    ) -> List[Tuple[Optional[float], Optional[float]]]:
         """Get parameter bounds for optimization."""
         return [
             (None, None),  # mu
