@@ -144,13 +144,13 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_jump_scale = self.std_increment * 0.5
         initial_jump_skew = float(np.sign(self.skewness)) * 2.0
 
-        return [
+        return np.array(
             initial_mu,
             initial_sigma,
             initial_jump_prob,
             initial_jump_scale,
             initial_jump_skew,
-        ]
+        )
 
     def _get_parameter_bounds(
         self,
@@ -189,7 +189,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         if initial_guess is None:
             initial_guess = self._get_initial_guess()
-        initial_guess = np.asarray(initial_guess)
+        #initial_guess = np.asarray(initial_guess)
 
         bounds = self._get_parameter_bounds()
 
