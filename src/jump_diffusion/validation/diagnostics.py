@@ -44,7 +44,9 @@ class ModelDiagnostics:
         self.dt = dt
         self.n_obs = len(self.data)
 
-    def ljung_box_test(self, lags: int = 10) -> Dict[str, Union[float, int, bool]]:
+    def ljung_box_test(
+        self, lags: int = 10
+    ) -> Dict[str, Union[float, int, bool]]:
         """
         Ljung-Box test for autocorrelation in residuals.
 
