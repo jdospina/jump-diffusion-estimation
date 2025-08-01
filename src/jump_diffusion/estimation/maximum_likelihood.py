@@ -145,11 +145,13 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_jump_skew = float(np.sign(self.skewness)) * 2.0
 
         return np.array(
-            initial_mu,
-            initial_sigma,
-            initial_jump_prob,
-            initial_jump_scale,
-            initial_jump_skew,
+            [
+                initial_mu,
+                initial_sigma,
+                initial_jump_prob,
+                initial_jump_scale,
+                initial_jump_skew,
+            ]
         )
 
     def _get_parameter_bounds(
