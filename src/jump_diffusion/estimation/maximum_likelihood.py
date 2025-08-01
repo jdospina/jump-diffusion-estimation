@@ -177,7 +177,7 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         Parameters:
         -----------
-        initial_guess : list, optional
+        initial_guess : np.array, optional
             Initial parameter values
         method : str
             Optimization method
