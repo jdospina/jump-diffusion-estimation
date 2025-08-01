@@ -144,7 +144,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_jump_scale = self.std_increment * 0.5
         initial_jump_skew = float(np.sign(self.skewness)) * 2.0
 
-        return np.array(
+        return np.ndarray(
             [
                 initial_mu,
                 initial_sigma,
