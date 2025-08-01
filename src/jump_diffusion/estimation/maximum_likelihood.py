@@ -199,8 +199,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = minimize(
-                self.log_likelihood,
-                initial_guess,
+                fun=self.log_likelihood,
+                x0=initial_guess,
                 method=method,
                 bounds=bounds,
                 options={"maxiter": 1000, "ftol": 1e-9, **kwargs},
