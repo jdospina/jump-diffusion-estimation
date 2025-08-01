@@ -63,8 +63,8 @@ dt = times[1] - times[0]
 estimator = JumpDiffusionEstimator(increments, dt)
 results = estimator.estimate()
 
-print(f"Estimated drift: {results.mu:.4f}")
-print(f"Estimated volatility: {results.sigma:.4f}")
+print(f"Estimated drift: {results['parameters']['mu']:.4f}")
+print(f"Estimated volatility: {results['parameters']['sigma']:.4f}")
 ```
 
 ## 📚 Documentation
@@ -78,7 +78,7 @@ print(f"Estimated volatility: {results.sigma:.4f}")
 
 See the `examples/` directory for:
 - Basic usage examples
-- Validation experiments  
+- Validation experiments
 - Real data analysis
 - Interactive Jupyter notebooks
 
