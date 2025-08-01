@@ -26,13 +26,13 @@ class TestJumpDiffusionEstimator:
 
     def test_log_likelihood(self):
         """Test log-likelihood calculation."""
-        params = [
+        params = np.ndarray([
             0.05,
             0.2,
             0.1,
             0.15,
             1.0,
-        ]  # [mu, sigma, jump_prob, jump_scale, jump_skew]
+        ])  # [mu, sigma, jump_prob, jump_scale, jump_skew]
         log_lik = self.estimator.log_likelihood(params)
 
         assert np.isfinite(log_lik)
