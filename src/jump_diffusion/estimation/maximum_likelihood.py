@@ -156,15 +156,15 @@ class JumpDiffusionEstimator(BaseEstimator):
 
     def _get_parameter_bounds(
         self,
-    ) -> List[Tuple[Optional[float], Optional[float]]]:
+    ) -> Tuple[Tuple[Optional[float], Optional[float]], ...]:
         """Get parameter bounds for optimization."""
-        return [
+        return (
             (-np.inf, np.inf),  # mu
             (1e-6, np.inf),  # sigma > 0
             (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
             (1e-6, np.inf),  # jump_scale > 0
             (-10, 10),  # jump_skew
-        ]
+        )
 
     def estimate(
         self,
@@ -191,7 +191,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         if initial_guess is None:
             initial_guess = self._get_initial_guess()
-        # initial_guess = np.asarray(initial_guess, dtype=float)
+        initial_guess = np.asarray(initial_guess, dtype=float)
 
         bounds = self._get_parameter_bounds()
 
