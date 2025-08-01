@@ -168,7 +168,7 @@ class JumpDiffusionEstimator(BaseEstimator):
 
     def estimate(
         self,
-        initial_guess: Optional[List[float]] = None,
+        initial_guess: Optional[np.ndarray] = None,
         method: str = "L-BFGS-B",
         **kwargs,
     ) -> Dict[str, Any]:
