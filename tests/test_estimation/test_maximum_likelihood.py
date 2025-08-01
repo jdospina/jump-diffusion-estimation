@@ -59,7 +59,7 @@ class TestJumpDiffusionEstimator:
         sim = JumpDiffusionSimulator(
             mu=0.02, sigma=0.1, jump_prob=0.05, jump_scale=0.2, jump_skew=0.0
         )
-        _, path, _ = sim.simulate_path(T=1.0, n_steps=10000, x0=0.0, seed=42)
+        _, path, _ = sim.simulate_path(T=1.0, n_steps=int(10000), x0=0.0, seed=42)
         increments = np.diff(path)
         estimator = JumpDiffusionEstimator(increments, 1 / 10000)
         results = estimator.estimate()
