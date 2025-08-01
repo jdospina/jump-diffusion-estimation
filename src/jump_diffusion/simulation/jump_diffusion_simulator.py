@@ -119,8 +119,8 @@ class JumpDiffusionSimulator(BaseSimulator):
             np.random.seed(seed)
 
         dt = T / n_steps
-        times = np.linspace(0, T, n_steps)
-        path = np.zeros(n_steps)
+        times = np.linspace(0, T, n_steps + 1)
+        path = np.zeros(n_steps + 1)
         path[0] = x0
 
         # Generate all random components
