@@ -10,7 +10,7 @@ import warnings
 from scipy import stats
 from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, Tuple
 from .base_estimator import BaseEstimator
 
 
