@@ -157,6 +157,31 @@ class JumpDiffusionSimulator(BaseSimulator):
     ):
         """
         Plot simulation results with comprehensive diagnostics.
+
+        Parameters
+        ----------
+        times : array-like, optional
+            Time grid for the plotted path. When ``None``, the time points from
+            the most recent call to :meth:`simulate_path` (uniformly spaced
+            between 0 and 1) are used.
+        path : array-like, optional
+            Simulated trajectory to visualise. Defaults to the last simulated
+            path stored by the simulator.
+        jumps : array-like, optional
+            Jump magnitudes for each step. Required to display jump-related
+            diagnostics. If ``None``, the jump component from the last
+            simulation is used.
+        figsize : tuple, optional
+            Figure size passed to :func:`matplotlib.pyplot.subplots`.
+
+        Notes
+        -----
+        The method creates a 2×2 grid of plots showing the trajectory with jump
+        markers, a stem plot of jump magnitudes, the distribution of increments,
+        and the distribution of jump sizes. If no arrays are provided and a
+        simulation has been run previously, these plots display the stored
+        results. Supplying ``times``, ``path`` and ``jumps`` overrides the stored
+        data and visualises the provided arrays instead.
         """
         if times is None or path is None:
             if self.last_path is None:
