@@ -81,7 +81,7 @@ Ready-to-run scripts are available in the `examples/` directory:
 Install optional dependencies and launch Jupyter to explore the notebook:
 
 ```bash
-pip install ipywidgets matplotlib
+pip install notebook ipywidgets matplotlib
 jupyter notebook
 ```
 
