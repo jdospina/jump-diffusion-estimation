@@ -15,7 +15,29 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from jump_diffusion import ValidationExperiment
 
+
 def main():
+    """Run validation experiments from the command line.
+
+    Arguments:
+        --n_sims (int): Number of simulations to run.
+        --T (float): Time horizon for each simulation.
+        --n_steps (int): Number of time steps per simulation.
+        --output (str, optional): JSON file where results will be stored.
+        --seed (int): Random seed for reproducibility.
+
+    Behavior:
+        Initializes a :class:`ValidationExperiment` with default parameters,
+        runs the specified number of simulations, analyzes the outcomes, saves
+        results to ``--output`` if provided, and displays diagnostic plots.
+
+    Output:
+        Prints progress to stdout, optionally writes a JSON summary, and shows
+        plots of the simulated and estimated parameters.
+
+    Example:
+        python scripts/run_validation.py --n_sims 20 --T 2.0 --output validation_results.json
+    """
     parser = argparse.ArgumentParser(description='Run jump-diffusion validation experiment')
     parser.add_argument('--n_sims', type=int, default=10, help='Number of simulations')
     parser.add_argument('--T', type=float, default=1.0, help='Time horizon')
