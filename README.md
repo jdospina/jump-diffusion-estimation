@@ -43,6 +43,7 @@ pip install jump-diffusion-estimation
 ## 🎯 Quick Start
 
 ```python
+import numpy as np
 from jump_diffusion import JumpDiffusionSimulator, JumpDiffusionEstimator
 
 # Create simulator
@@ -67,20 +68,12 @@ print(f"Estimated drift: {results['parameters']['mu']:.4f}")
 print(f"Estimated volatility: {results['parameters']['sigma']:.4f}")
 ```
 
-## 📚 Documentation
+## 📚 Examples
 
-- [Getting Started Tutorial](examples/notebooks/tutorial_01_introduction.ipynb)
-- [Parameter Estimation Guide](examples/notebooks/tutorial_02_parameter_estimation.ipynb)
-- [API Reference](docs/api/)
-- [Theory Background](docs/theory/)
+Ready-to-run scripts are available in the `examples/` directory:
 
-## 🧪 Examples
-
-See the `examples/` directory for:
-- Basic usage examples
-- Validation experiments
-- Real data analysis
-- Interactive Jupyter notebooks
+- [basic_usage.py](examples/basic_usage.py) – demonstrates basic library usage
+- [validation_experiment.py](examples/validation_experiment.py) – runs Monte Carlo validation experiments
 
 ## 🤝 Contributing
 
