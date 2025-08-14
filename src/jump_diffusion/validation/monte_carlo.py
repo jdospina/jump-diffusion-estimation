@@ -194,8 +194,20 @@ class ValidationExperiment:
         return analysis
 
     def plot_results(self, figsize: tuple = (15, 10)):
-        """
-        Create comprehensive plots of validation results.
+        """Create plots summarizing parameter estimation accuracy.
+
+        Parameters
+        ----------
+        figsize : tuple, optional
+            Width and height of the Matplotlib figure in inches.
+
+        Notes
+        -----
+        Generates a 2x3 grid of subplots showing scatter plots for
+        each parameter and a summary bar chart of bias and RMSE. The
+        :meth:`run_experiment` method must be called beforehand to
+        populate ``self.results``. This function displays the plots
+        directly and returns ``None``.
         """
         if len(self.results) == 0:
             print("No results to plot. Run experiment first.")
