@@ -236,7 +236,19 @@ class JumpDiffusionEstimator(BaseEstimator):
         return results
 
     def diagnostics(self) -> None:
-        """Print diagnostic information about the estimation."""
+        """Print diagnostic information about the estimation.
+
+        The method writes a summary of the fitted model to ``stdout`` and
+        returns ``None``. The following metrics are reported:
+
+        * Estimated parameters (μ, σ, jump probability, jump scale, jump
+          skewness)
+        * Log-likelihood value
+        * Information criteria (AIC and BIC)
+        * Optimizer convergence flag
+        * Comparison of empirical vs. theoretical mean, standard deviation
+          and the expected number of jumps
+        """
         if not self.fitted or self.results is None:
             print("Model not fitted. Run estimate() first.")
             return
