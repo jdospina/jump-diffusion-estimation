@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from typing import Optional, Tuple
 from .base_simulator import BaseSimulator
 from ..models.jump_diffusion import JumpDiffusionModel
+from ..distributions import JumpDistribution
 
 
 class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
@@ -26,8 +27,8 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         mu: float = 0.05,
         sigma: float = 0.2,
         jump_prob: float = 0.1,
-        jump_scale: float = 0.3,
-        jump_skew: float = 2.0,
+        jump_distribution: Optional[JumpDistribution] = None,
+        **jump_params: float,
     ):
         """
         Initialize the jump-diffusion simulator.
@@ -40,18 +41,22 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
             Diffusion volatility
         jump_prob : float
             Probability of jump per period
-        jump_scale : float
-            Scale parameter for jump sizes
-        jump_skew : float
-            Skewness parameter for jumps
+        jump_distribution : JumpDistribution, optional
+            Distribution used for the jump sizes. Defaults to
+            :class:`SkewNormalJump`.
+        **jump_params : float
+            Values for ``jump_distribution.param_names``, e.g.
+            ``jump_scale``/``jump_skew`` for the default skew-normal
+            distribution. Any name not supplied falls back to
+            ``jump_distribution.default_params()``.
         """
         JumpDiffusionModel.__init__(
             self,
             mu=mu,
             sigma=sigma,
             jump_prob=jump_prob,
-            jump_scale=jump_scale,
-            jump_skew=jump_skew,
+            jump_distribution=jump_distribution,
+            **jump_params,
         )
 
         # Store last simulation results

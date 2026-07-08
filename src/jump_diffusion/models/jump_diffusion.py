@@ -1,25 +1,27 @@
 """
 Jump-Diffusion Model Implementation
 
-This module implements the jump-diffusion model with asymmetric jump
-distributions.
+This module implements the jump-diffusion model with a pluggable jump-size
+distribution.
 """
 
 import numpy as np
-from scipy.stats import norm, skewnorm
-from typing import Optional, Tuple, cast
+from scipy.stats import norm
+from typing import Dict, Optional, Tuple
 from .base_model import BaseStochasticModel
+from ..distributions import JumpDistribution, SkewNormalJump
 
 
 class JumpDiffusionModel(BaseStochasticModel):
     """
-    Jump-diffusion model with asymmetric jump distributions.
+    Jump-diffusion model with a pluggable jump-size distribution.
 
     The model follows the SDE:
     dX_t = μ dt + σ dW_t + J_t dN_t
 
-    Where J_t follows a skew-normal distribution and N_t is a Poisson process
-    approximated by Bernoulli trials.
+    Where J_t follows the distribution given by ``jump_distribution``
+    (skew-normal by default) and N_t is a Poisson process approximated by
+    Bernoulli trials.
     """
 
     def __init__(
@@ -27,8 +29,8 @@ class JumpDiffusionModel(BaseStochasticModel):
         mu: float = 0.05,
         sigma: float = 0.2,
         jump_prob: float = 0.1,
-        jump_scale: float = 0.15,
-        jump_skew: float = 0.0,
+        jump_distribution: Optional[JumpDistribution] = None,
+        **jump_params: float,
     ):
         """
         Initialize the jump-diffusion model.
@@ -41,18 +43,31 @@ class JumpDiffusionModel(BaseStochasticModel):
             Diffusion volatility
         jump_prob : float
             Probability of jump per time step
-        jump_scale : float
-            Scale parameter for jump sizes
-        jump_skew : float
-            Skewness parameter for jump distribution
+        jump_distribution : JumpDistribution, optional
+            Distribution used for the jump sizes. Defaults to
+            :class:`SkewNormalJump`.
+        **jump_params : float
+            Values for ``jump_distribution.param_names``. Any name not
+            supplied falls back to ``jump_distribution.default_params()``.
         """
+        self.jump_distribution = jump_distribution or SkewNormalJump()
+
+        resolved_jump_params = self.jump_distribution.default_params()
+        resolved_jump_params.update(jump_params)
+
         super().__init__(
             mu=mu,
             sigma=sigma,
             jump_prob=jump_prob,
-            jump_scale=jump_scale,
-            jump_skew=jump_skew,
+            **resolved_jump_params,
         )
+
+    def _jump_params(self) -> Dict[str, float]:
+        """Extract this model's jump-distribution parameter values."""
+        return {
+            name: self.parameters[name]
+            for name in self.jump_distribution.param_names
+        }
 
     def simulate(
         self,
@@ -84,15 +99,7 @@ class JumpDiffusionModel(BaseStochasticModel):
             self.parameters["jump_prob"],
             n_steps,
         )
-        jump_sizes = cast(
-            np.ndarray,
-            skewnorm.rvs(
-                a=self.parameters["jump_skew"],
-                loc=0,
-                scale=self.parameters["jump_scale"],
-                size=n_steps,
-            ),
-        )
+        jump_sizes = self.jump_distribution.rvs(self._jump_params(), size=n_steps)
 
         # Construct path
         for i in range(n_steps):
@@ -126,8 +133,6 @@ class JumpDiffusionModel(BaseStochasticModel):
         mu = self.parameters["mu"]
         sigma = self.parameters["sigma"]
         p = self.parameters["jump_prob"]
-        omega = self.parameters["jump_scale"]
-        alpha = self.parameters["jump_skew"]
 
         # Pure diffusion component
         diffusion_mean = mu * dt
@@ -138,25 +143,29 @@ class JumpDiffusionModel(BaseStochasticModel):
             scale=diffusion_std,
         )
 
-        # Jump + diffusion component
-        combined_mean = mu * dt
-        combined_var = sigma**2 * dt + omega**2
-        combined_std = np.sqrt(combined_var)
-        adjusted_skew = alpha * omega / combined_std
-
-        jump_diffusion_density = skewnorm.pdf(
-            x, a=adjusted_skew, loc=combined_mean, scale=combined_std
+        # Jump + diffusion component: use a closed form if the jump
+        # distribution has one, otherwise fall back to FFT convolution.
+        jump_params = self._jump_params()
+        jump_diffusion_density = self.jump_distribution.diffusion_convolved_pdf(
+            x, jump_params, diffusion_mean, diffusion_std
         )
+        if jump_diffusion_density is None:
+            jump_diffusion_density = self.jump_distribution.fft_convolved_pdf(
+                x, jump_params, diffusion_mean, diffusion_std
+            )
 
         # Mixture
         return (1 - p) * diffusion_density + p * jump_diffusion_density
 
     def get_parameter_bounds(self) -> list:
         """Get parameter bounds for optimization."""
-        return [
+        bounds = [
             (None, None),  # mu
             (1e-6, None),  # sigma > 0
             (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
-            (1e-6, None),  # jump_scale > 0
-            (-10, 10),  # jump_skew bounded for stability
         ]
+        jump_bounds = self.jump_distribution.param_bounds()
+        bounds += [
+            jump_bounds[name] for name in self.jump_distribution.param_names
+        ]
+        return bounds
