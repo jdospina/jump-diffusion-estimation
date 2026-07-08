@@ -6,9 +6,7 @@ through Monte Carlo experiments and diagnostic tests.
 """
 
 from .monte_carlo import ValidationExperiment
-from .diagnostics import ModelDiagnostics
 
 __all__ = [
     "ValidationExperiment",
-    "ModelDiagnostics",
 ]
