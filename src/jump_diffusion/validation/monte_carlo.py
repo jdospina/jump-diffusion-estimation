@@ -67,8 +67,10 @@ class ValidationExperiment:
         print(f"Running {n_simulations} validation experiments...")
         print(f"True parameters: {self.true_params}")
 
-        # Create simulator
-        simulator = JumpDiffusionSimulator(**self.true_params)
+        # Create simulator. true_params is Dict[str, float] (never
+        # contains "jump_distribution"), but mypy can't verify that from
+        # a **-unpack against a keyword with a non-float type.
+        simulator = JumpDiffusionSimulator(**self.true_params)  # type: ignore[arg-type]
 
         results: List[Dict[str, Any]] = []
         successful_runs = 0

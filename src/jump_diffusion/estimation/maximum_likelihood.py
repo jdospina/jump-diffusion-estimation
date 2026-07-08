@@ -12,18 +12,25 @@ from scipy.optimize import minimize
 from typing import Dict, Any, Optional
 from .base_estimator import BaseEstimator
 from ..models.jump_diffusion import JumpDiffusionModel
+from ..distributions import JumpDistribution
 
 
 class JumpDiffusionEstimator(BaseEstimator):
     """
     Maximum likelihood estimator for jump-diffusion models.
 
-    This estimator handles jump-diffusion processes with asymmetric
-    jump distributions using mixture likelihood functions. The input
-    ``data`` must be a one-dimensional array of increments.
+    This estimator handles jump-diffusion processes with a pluggable
+    jump-size distribution (skew-normal by default) using mixture
+    likelihood functions. The input ``data`` must be a one-dimensional
+    array of increments.
     """
 
-    def __init__(self, data: np.ndarray, dt: float):
+    def __init__(
+        self,
+        data: np.ndarray,
+        dt: float,
+        jump_distribution: Optional[JumpDistribution] = None,
+    ):
         """
         Initialize the estimator.
 
@@ -34,6 +41,9 @@ class JumpDiffusionEstimator(BaseEstimator):
             a path, compute ``np.diff(path)`` first.
         dt : float
             Time step size between consecutive increments.
+        jump_distribution : JumpDistribution, optional
+            Distribution assumed for the jump sizes. Defaults to
+            :class:`SkewNormalJump`.
         """
         # Accept only 1D arrays of increments
         if data.ndim == 1:
@@ -45,7 +55,12 @@ class JumpDiffusionEstimator(BaseEstimator):
         super().__init__(self.increments, dt)
 
         # Model used to evaluate the mixture likelihood at trial parameters
-        self._model = JumpDiffusionModel()
+        self._model = JumpDiffusionModel(jump_distribution=jump_distribution)
+        self._param_names = (
+            "mu",
+            "sigma",
+            "jump_prob",
+        ) + self._model.jump_distribution.param_names
 
         # Calculate basic statistics
         self.n_obs = len(self.increments)
@@ -61,28 +76,23 @@ class JumpDiffusionEstimator(BaseEstimator):
         Parameters:
         -----------
         params : np.ndarray
-            Parameter vector [mu, sigma, jump_prob, jump_scale, jump_skew]
+            Parameter vector, ordered as ``self._param_names``:
+            ``[mu, sigma, jump_prob, *jump_distribution.param_names]``.
 
         Returns:
         --------
         float
             Negative log-likelihood value
         """
-        mu, sigma, jump_prob, jump_scale, jump_skew = params
+        sigma, jump_prob = params[1], params[2]
 
-        # Parameter constraints
-        if sigma <= 0 or jump_scale <= 0:
+        # Parameter constraints shared by every jump distribution
+        if sigma <= 0:
             return np.inf
         if jump_prob < 0 or jump_prob > 1:
             return np.inf
 
-        self._model.update_parameters(
-            mu=mu,
-            sigma=sigma,
-            jump_prob=jump_prob,
-            jump_scale=jump_scale,
-            jump_skew=jump_skew,
-        )
+        self._model.update_parameters(**dict(zip(self._param_names, params)))
         return -self._model.log_likelihood(self.increments, self.dt)
 
     def _get_initial_guess(self) -> np.ndarray:
@@ -90,18 +100,17 @@ class JumpDiffusionEstimator(BaseEstimator):
         initial_mu = self.mean_increment / self.dt
         initial_sigma = self.std_increment / np.sqrt(self.dt)
         initial_jump_prob = 0.1
-        initial_jump_scale = self.std_increment * 0.5
-        initial_jump_skew = float(np.sign(self.skewness)) * 2.0
 
-        return np.array(
-            [
-                initial_mu,
-                initial_sigma,
-                initial_jump_prob,
-                initial_jump_scale,
-                initial_jump_skew,
-            ]
+        jump_guess = self._model.jump_distribution.initial_guess(
+            self.mean_increment, self.std_increment, self.skewness
         )
+
+        values = [initial_mu, initial_sigma, initial_jump_prob]
+        values += [
+            jump_guess[name]
+            for name in self._model.jump_distribution.param_names
+        ]
+        return np.array(values)
 
     def estimate(
         self,
@@ -144,16 +153,10 @@ class JumpDiffusionEstimator(BaseEstimator):
             )
 
         # Process results
-        mu_hat, sigma_hat, p_hat, omega_hat, alpha_hat = result.x
+        parameters = dict(zip(self._param_names, result.x))
 
         results: Dict[str, Any] = {
-            "parameters": {
-                "mu": mu_hat,
-                "sigma": sigma_hat,
-                "jump_prob": p_hat,
-                "jump_scale": omega_hat,
-                "jump_skew": alpha_hat,
-            },
+            "parameters": parameters,
             "log_likelihood": -result.fun,
             "aic": 2 * len(result.x) + 2 * result.fun,
             "bic": len(result.x) * np.log(self.n_obs) + 2 * result.fun,
@@ -178,8 +181,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         The method writes a summary of the fitted model to ``stdout`` and
         returns ``None``. The following metrics are reported:
 
-        * Estimated parameters (μ, σ, jump probability, jump scale, jump
-          skewness)
+        * Estimated parameters (μ, σ, jump probability, and the jump
+          distribution's own parameters)
         * Log-likelihood value
         * Information criteria (AIC and BIC)
         * Optimizer convergence flag
@@ -198,8 +201,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         print(f"Drift (μ):              {params['mu']:.6f}")
         print(f"Volatility (σ):         {params['sigma']:.6f}")
         print(f"Jump probability (p):   {params['jump_prob']:.6f}")
-        print(f"Jump scale (ω):         {params['jump_scale']:.6f}")
-        print(f"Jump skewness (α):      {params['jump_skew']:.6f}")
+        for name in self._model.jump_distribution.param_names:
+            print(f"{name:<24}{params[name]:.6f}")
         print(
             f"\nLog-likelihood:         {self.results['log_likelihood']:.2f}",
         )
@@ -211,6 +214,9 @@ class JumpDiffusionEstimator(BaseEstimator):
         print("\nDATA vs MODEL COMPARISON")
         print("-" * 30)
         theoretical_mean = params["mu"] * self.dt
+        # Approximation: treats jump_scale as the jump size's standard
+        # deviation, which holds exactly for the Normal jump distribution
+        # and approximately for the others.
         theoretical_var = (
             params["sigma"] ** 2 * self.dt
             + params["jump_prob"] * params["jump_scale"] ** 2
