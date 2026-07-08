@@ -65,8 +65,7 @@ class JumpDiffusionModel(BaseStochasticModel):
     def _jump_params(self) -> Dict[str, float]:
         """Extract this model's jump-distribution parameter values."""
         return {
-            name: self.parameters[name]
-            for name in self.jump_distribution.param_names
+            name: self.parameters[name] for name in self.jump_distribution.param_names
         }
 
     def simulate(
@@ -165,7 +164,5 @@ class JumpDiffusionModel(BaseStochasticModel):
             (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
         ]
         jump_bounds = self.jump_distribution.param_bounds()
-        bounds += [
-            jump_bounds[name] for name in self.jump_distribution.param_names
-        ]
+        bounds += [jump_bounds[name] for name in self.jump_distribution.param_names]
         return bounds

@@ -107,8 +107,7 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         values = [initial_mu, initial_sigma, initial_jump_prob]
         values += [
-            jump_guess[name]
-            for name in self._model.jump_distribution.param_names
+            jump_guess[name] for name in self._model.jump_distribution.param_names
         ]
         return np.array(values)
 

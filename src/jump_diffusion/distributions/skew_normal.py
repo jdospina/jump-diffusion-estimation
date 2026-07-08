@@ -76,9 +76,7 @@ class SkewNormalJump(JumpDistribution):
 
         return cast(
             np.ndarray,
-            skewnorm.pdf(
-                x, a=adjusted_skew, loc=diffusion_mean, scale=combined_std
-            ),
+            skewnorm.pdf(x, a=adjusted_skew, loc=diffusion_mean, scale=combined_std),
         )
 
     def rvs(

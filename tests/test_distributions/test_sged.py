@@ -91,9 +91,7 @@ class TestSGEDJump:
         increments = np.diff(path)
         dt = times[1] - times[0]
 
-        estimator = JumpDiffusionEstimator(
-            increments, dt, jump_distribution=SGEDJump()
-        )
+        estimator = JumpDiffusionEstimator(increments, dt, jump_distribution=SGEDJump())
         initial_guess = np.array(
             [
                 true_params["mu"],
