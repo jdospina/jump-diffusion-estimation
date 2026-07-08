@@ -1,17 +1,17 @@
 """
 Maximum Likelihood Estimator for Jump-Diffusion Models
 
-This module contains our original JumpDiffusionLikelihood class,
-refactored as JumpDiffusionEstimator to fit the new architecture.
+This module estimates JumpDiffusionModel parameters by maximizing the
+mixture likelihood implemented on the model itself.
 """
 
 import numpy as np
 import warnings
 from scipy import stats
-from scipy.stats import norm, skewnorm
 from scipy.optimize import minimize
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 from .base_estimator import BaseEstimator
+from ..models.jump_diffusion import JumpDiffusionModel
 
 
 class JumpDiffusionEstimator(BaseEstimator):
@@ -44,64 +44,15 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         super().__init__(self.increments, dt)
 
+        # Model used to evaluate the mixture likelihood at trial parameters
+        self._model = JumpDiffusionModel()
+
         # Calculate basic statistics
         self.n_obs = len(self.increments)
         self.mean_increment = np.mean(self.increments)
         self.std_increment = np.std(self.increments)
         self.skewness = stats.skew(self.increments)
         self.kurtosis = stats.kurtosis(self.increments)
-
-    def _diffusion_density(
-        self,
-        x: np.ndarray,
-        mu: float,
-        sigma: float,
-    ) -> np.ndarray:
-        """Calculate pure diffusion density."""
-        mean = mu * self.dt
-        std = sigma * np.sqrt(self.dt)
-        return norm.pdf(x, loc=mean, scale=std)
-
-    def _jump_diffusion_density(
-        self,
-        x: np.ndarray,
-        mu: float,
-        sigma: float,
-        jump_scale: float,
-        jump_skew: float,
-    ) -> np.ndarray:
-        """Calculate jump + diffusion density."""
-        combined_mean = mu * self.dt
-        combined_var = sigma**2 * self.dt + jump_scale**2
-        combined_std = np.sqrt(combined_var)
-        adjusted_skew = jump_skew * jump_scale / combined_std
-
-        return skewnorm.pdf(
-            x,
-            a=adjusted_skew,
-            loc=combined_mean,
-            scale=combined_std,
-        )
-
-    def _mixture_density(
-        self,
-        x: np.ndarray,
-        mu: float,
-        sigma: float,
-        jump_prob: float,
-        jump_scale: float,
-        jump_skew: float,
-    ) -> np.ndarray:
-        """Calculate mixture density."""
-        diffusion_component = (1 - jump_prob) * self._diffusion_density(
-            x,
-            mu,
-            sigma,
-        )
-        jump_component = jump_prob * self._jump_diffusion_density(
-            x, mu, sigma, jump_scale, jump_skew
-        )
-        return diffusion_component + jump_component
 
     def log_likelihood(self, params: np.ndarray) -> float:
         """
@@ -125,16 +76,14 @@ class JumpDiffusionEstimator(BaseEstimator):
         if jump_prob < 0 or jump_prob > 1:
             return np.inf
 
-        # Calculate densities
-        densities = self._mixture_density(
-            self.increments, mu, sigma, jump_prob, jump_scale, jump_skew
+        self._model.update_parameters(
+            mu=mu,
+            sigma=sigma,
+            jump_prob=jump_prob,
+            jump_scale=jump_scale,
+            jump_skew=jump_skew,
         )
-
-        # Numerical stability
-        densities = np.maximum(densities, 1e-300)
-
-        # Return negative log-likelihood
-        return -np.sum(np.log(densities))
+        return -self._model.log_likelihood(self.increments, self.dt)
 
     def _get_initial_guess(self) -> np.ndarray:
         """Generate intelligent initial parameter guess."""
@@ -152,18 +101,6 @@ class JumpDiffusionEstimator(BaseEstimator):
                 initial_jump_scale,
                 initial_jump_skew,
             ]
-        )
-
-    def _get_parameter_bounds(
-        self,
-    ) -> Tuple[Tuple[Optional[float], Optional[float]], ...]:
-        """Get parameter bounds for optimization."""
-        return (
-            (-np.inf, np.inf),  # mu
-            (1e-6, np.inf),  # sigma > 0
-            (1e-6, 1 - 1e-6),  # 0 < jump_prob < 1
-            (1e-6, np.inf),  # jump_scale > 0
-            (-10, 10),  # jump_skew
         )
 
     def estimate(
@@ -193,7 +130,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             initial_guess = self._get_initial_guess()
         initial_guess = np.asarray(initial_guess, dtype=float)
 
-        bounds = self._get_parameter_bounds()
+        bounds = self._model.get_parameter_bounds()
 
         # Optimization
         with warnings.catch_warnings():
