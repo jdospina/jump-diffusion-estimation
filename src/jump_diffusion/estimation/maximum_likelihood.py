@@ -64,10 +64,10 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         # Calculate basic statistics
         self.n_obs = len(self.increments)
-        self.mean_increment = np.mean(self.increments)
-        self.std_increment = np.std(self.increments)
-        self.skewness = stats.skew(self.increments)
-        self.kurtosis = stats.kurtosis(self.increments)
+        self.mean_increment = float(np.mean(self.increments))
+        self.std_increment = float(np.std(self.increments))
+        self.skewness = float(stats.skew(self.increments))
+        self.kurtosis = float(stats.kurtosis(self.increments))
 
     def log_likelihood(self, params: np.ndarray) -> float:
         """
