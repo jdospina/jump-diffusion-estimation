@@ -85,20 +85,26 @@ black src/ tests/
 5. Write tests and documentation
 
 ### Adding New Distributions
-1. Create in `distributions/` directory
-2. Follow the established interface pattern
-3. Include analytical properties when possible
-4. Add tests for distribution properties
+1. Create a module in `distributions/` with a class inheriting from `JumpDistribution`
+2. Implement `pdf`, `default_params`, `param_bounds`, and `initial_guess`
+3. If a closed-form density is known for (diffusion + jump), override `diffusion_convolved_pdf`; otherwise the generic FFT-based convolution fallback handles it automatically (see `SGEDJump` for an example without a closed form, and `SkewNormalJump`/`NormalJump` for examples with one)
+4. If a fast native sampler exists, override `rvs`; otherwise the generic inverse-CDF fallback is used
+5. Export it from `distributions/__init__.py`
+6. Add tests: the pdf should integrate to 1, `diffusion_convolved_pdf` (if overridden) should match the generic FFT fallback within its numerical tolerance, and MLE should recover known parameters from simulated data
 
 ## 🔬 Research Extensions
 
 We particularly welcome contributions in these areas:
 
 ### New Jump Distributions
-- Asymmetric Laplace distributions
+- Kou (double-exponential)
+- Student-t
 - Generalized hyperbolic distributions
 - Tempered stable distributions
 - Custom mixture distributions
+
+(Skew-normal, Normal/Merton, and the Skewed Generalized Error Distribution
+are already built in — see `distributions/`.)
 
 ### Advanced Models
 - Multiple jump types per period
@@ -107,6 +113,7 @@ We particularly welcome contributions in these areas:
 - Fractional jump-diffusion
 
 ### Estimation Methods
+- Differential Evolution (`scipy.optimize.differential_evolution`) as an alternative to L-BFGS-B — more robust to poor initial guesses on this mixture likelihood, at higher computational cost
 - Bayesian estimation (MCMC)
 - Method of moments with characteristic functions
 - Particle filter methods

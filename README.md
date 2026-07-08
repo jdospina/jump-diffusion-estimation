@@ -6,9 +6,10 @@ A comprehensive Python library for simulating and estimating parameters of jump-
 
 - **Flexible Simulation**: Generate jump-diffusion paths with customizable parameters
 - **Maximum Likelihood Estimation**: Robust parameter estimation using mixture distributions
-- **Asymmetric Jump Distributions**: Support for skew-normal and other asymmetric distributions
+- **Pluggable Jump Distributions**: Skew-normal, Normal (Merton), and the Skewed Generalized Error Distribution (SGED) built in, with a simple interface (`jump_distribution=`) to add more
+- **Goodness-of-Fit Comparison**: Rank candidate jump distributions on the same data via AIC/BIC and a simulation-based Kolmogorov-Smirnov test
 - **Validation Tools**: Monte Carlo experiments for method validation
-- **Extensible Architecture**: Easy to add new models and estimation methods
+- **Extensible Architecture**: Easy to add new models, jump distributions, and estimation methods
 - **Educational Focus**: Comprehensive documentation and tutorials
 
 ## 📊 Model
@@ -66,6 +67,45 @@ results = estimator.estimate()
 
 print(f"Estimated drift: {results['parameters']['mu']:.4f}")
 print(f"Estimated volatility: {results['parameters']['sigma']:.4f}")
+```
+
+### Using a different jump distribution
+
+Jumps follow a skew-normal distribution by default. Other distributions can be plugged in via `jump_distribution`, both when simulating and when estimating:
+
+```python
+from jump_diffusion.distributions import SGEDJump
+
+simulator = JumpDiffusionSimulator(
+    mu=0.05, sigma=0.2, jump_prob=0.1,
+    jump_distribution=SGEDJump(),
+    jump_loc=0.0, jump_scale=0.15, jump_nu=1.5, jump_xi=2.0,
+)
+times, path, jumps = simulator.simulate_path(T=1.0, n_steps=252)
+
+increments = np.diff(path)
+dt = times[1] - times[0]
+estimator = JumpDiffusionEstimator(increments, dt, jump_distribution=SGEDJump())
+results = estimator.estimate()
+```
+
+Distributions without a known closed-form likelihood (like SGED) fall back to a generic FFT-based convolution to approximate the mixture density, so adding a new distribution only requires implementing its `pdf`.
+
+### Comparing jump distributions
+
+`JumpDistributionComparison` fits several candidate jump distributions to the same data and ranks them by AIC/BIC plus a simulation-based Kolmogorov-Smirnov test:
+
+```python
+from jump_diffusion.distributions import NormalJump, SGEDJump, SkewNormalJump
+from jump_diffusion.validation import JumpDistributionComparison
+
+comparison = JumpDistributionComparison(increments, dt)
+comparison.fit("Normal", NormalJump())
+comparison.fit("SkewNormal", SkewNormalJump())
+comparison.fit("SGED", SGEDJump())
+
+print(comparison.compare())  # ranked by AIC, includes KS statistic/p-value
+comparison.plot_comparison()
 ```
 
 ## 📚 Examples

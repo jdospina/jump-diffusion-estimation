@@ -118,7 +118,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         method: str = "L-BFGS-B",
         **kwargs,
     ) -> Dict[str, Any]:
-        """
+        r"""
         Estimate parameters using maximum likelihood.
 
         Parameters:
@@ -127,7 +127,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             Initial parameter values
         method : str
             Optimization method
-        **kwargs : dict
+        \*\*kwargs : dict
             Additional arguments for optimizer
 
         Returns:

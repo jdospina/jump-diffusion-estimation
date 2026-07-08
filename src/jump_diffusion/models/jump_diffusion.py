@@ -32,7 +32,7 @@ class JumpDiffusionModel(BaseStochasticModel):
         jump_distribution: Optional[JumpDistribution] = None,
         **jump_params: float,
     ):
-        """
+        r"""
         Initialize the jump-diffusion model.
 
         Parameters:
@@ -46,7 +46,7 @@ class JumpDiffusionModel(BaseStochasticModel):
         jump_distribution : JumpDistribution, optional
             Distribution used for the jump sizes. Defaults to
             :class:`SkewNormalJump`.
-        **jump_params : float
+        \*\*jump_params : float
             Values for ``jump_distribution.param_names``. Any name not
             supplied falls back to ``jump_distribution.default_params()``.
         """
