@@ -1,23 +1,24 @@
 """
 Jump-Diffusion Simulator Implementation
 
-This module contains our original JumpDiffusionSimulator class,
-refactored to fit the new architecture.
+This module contains JumpDiffusionSimulator, which builds on the path
+and likelihood math implemented in :class:`JumpDiffusionModel` and adds
+state-tracking and visualisation on top of it.
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import skewnorm
 from typing import Optional, Tuple
 from .base_simulator import BaseSimulator
+from ..models.jump_diffusion import JumpDiffusionModel
 
 
-class JumpDiffusionSimulator(BaseSimulator):
+class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
     """
     Simulator for jump-diffusion processes with asymmetric jumps.
 
-    This is our original simulator, refactored to inherit from BaseSimulator
-    and integrate with the new modular architecture.
+    Inherits path generation from :class:`JumpDiffusionModel` and adds
+    state-tracking (for repeated plotting) and visualisation on top.
     """
 
     def __init__(
@@ -44,7 +45,8 @@ class JumpDiffusionSimulator(BaseSimulator):
         jump_skew : float
             Skewness parameter for jumps
         """
-        super().__init__(
+        JumpDiffusionModel.__init__(
+            self,
             mu=mu,
             sigma=sigma,
             jump_prob=jump_prob,
@@ -56,38 +58,6 @@ class JumpDiffusionSimulator(BaseSimulator):
         self.last_path: Optional[np.ndarray] = None
         self.last_jumps: Optional[np.ndarray] = None
         self.last_jump_times: Optional[np.ndarray] = None
-
-    def generate_jump_component(
-        self, n_steps: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Generate jump components for simulation.
-
-        Returns:
-        --------
-        tuple
-            (actual_jumps, jump_indicators, jump_times)
-        """
-        # Bernoulli process for jump timing
-        jump_indicators = np.random.binomial(
-            1,
-            self.parameters["jump_prob"],
-            n_steps,
-        )
-
-        # Jump magnitudes from skew-normal distribution
-        all_jump_sizes = skewnorm.rvs(
-            a=self.parameters["jump_skew"],
-            loc=0,
-            scale=self.parameters["jump_scale"],
-            size=n_steps,
-        )
-
-        # Actual jumps (zero when no jump occurs)
-        actual_jumps = jump_indicators * all_jump_sizes
-        jump_times = np.where(jump_indicators == 1)[0]
-
-        return actual_jumps, jump_indicators, jump_times
 
     def simulate_path(
         self,
@@ -115,31 +85,10 @@ class JumpDiffusionSimulator(BaseSimulator):
         tuple
             (times, path, jumps)
         """
-        if seed is not None:
-            np.random.seed(seed)
-
-        dt = T / n_steps
-        times = np.linspace(0, T, n_steps + 1)
-        path = np.zeros(n_steps + 1)
-        path[0] = x0
-
-        # Generate all random components
-        diffusion_innovations = np.random.normal(0, 1, n_steps)
-        (
-            jump_components,
-            jump_indicators,
-            jump_times,
-        ) = self.generate_jump_component(n_steps)
-
-        # Build path step by step
-        for i in range(n_steps):
-            drift_term = self.parameters["mu"] * dt
-            sigma_dt = self.parameters["sigma"] * np.sqrt(dt)
-            diffusion_term = sigma_dt * diffusion_innovations[i]
-            jump_term = jump_components[i]
-
-            increment = drift_term + diffusion_term + jump_term
-            path[i + 1] = path[i] + increment
+        times, path, jump_components = self.simulate(
+            T=T, n_steps=n_steps, x0=x0, seed=seed
+        )
+        jump_times = np.where(jump_components != 0)[0]
 
         # Store for plotting
         self.last_path = path
