@@ -64,10 +64,10 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         # Calculate basic statistics
         self.n_obs = len(self.increments)
-        self.mean_increment = np.mean(self.increments)
-        self.std_increment = np.std(self.increments)
-        self.skewness = stats.skew(self.increments)
-        self.kurtosis = stats.kurtosis(self.increments)
+        self.mean_increment = float(np.mean(self.increments))
+        self.std_increment = float(np.std(self.increments))
+        self.skewness = float(stats.skew(self.increments))
+        self.kurtosis = float(stats.kurtosis(self.increments))
 
     def log_likelihood(self, params: np.ndarray) -> float:
         """
@@ -107,8 +107,7 @@ class JumpDiffusionEstimator(BaseEstimator):
 
         values = [initial_mu, initial_sigma, initial_jump_prob]
         values += [
-            jump_guess[name]
-            for name in self._model.jump_distribution.param_names
+            jump_guess[name] for name in self._model.jump_distribution.param_names
         ]
         return np.array(values)
 
@@ -118,7 +117,7 @@ class JumpDiffusionEstimator(BaseEstimator):
         method: str = "L-BFGS-B",
         **kwargs,
     ) -> Dict[str, Any]:
-        """
+        r"""
         Estimate parameters using maximum likelihood.
 
         Parameters:
@@ -127,7 +126,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             Initial parameter values
         method : str
             Optimization method
-        **kwargs : dict
+        \*\*kwargs : dict
             Additional arguments for optimizer
 
         Returns:

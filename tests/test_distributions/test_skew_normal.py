@@ -37,9 +37,10 @@ class TestSkewNormalJump:
         )[0]
 
         def integrand(j):
-            return norm.pdf(
-                x0 - j, loc=diffusion_mean, scale=diffusion_std
-            ) * sn.pdf(np.array([j]), params)[0]
+            return (
+                norm.pdf(x0 - j, loc=diffusion_mean, scale=diffusion_std)
+                * sn.pdf(np.array([j]), params)[0]
+            )
 
         true_value, _ = quad(integrand, -2, 2, limit=500)
 

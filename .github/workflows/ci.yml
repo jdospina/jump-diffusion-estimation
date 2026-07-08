@@ -46,23 +46,23 @@ jobs:
       run: |
         mypy src/jump_diffusion
 
-  # docs:  ← COMENTAR O ELIMINAR toda esta sección
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - uses: actions/checkout@v4
-  #   
-  #   - name: Set up Python
-  #     uses: actions/setup-python@v4
-  #     with:
-  #       python-version: 3.9
-  #   
-  #   - name: Install dependencies
-  #     run: |
-  #       python -m pip install --upgrade pip
-  #       pip install -r requirements.txt
-  #       pip install -e .
-  #   
-  #   - name: Build documentation
-  #     run: |
-  #       cd docs
-  #       make html
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -e .[dev]
+
+    - name: Build documentation
+      run: |
+        cd docs
+        make html

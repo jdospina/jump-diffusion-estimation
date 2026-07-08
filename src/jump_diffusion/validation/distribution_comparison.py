@@ -46,7 +46,7 @@ class JumpDistributionComparison:
         seed: Optional[int] = None,
         **estimate_kwargs: Any,
     ) -> Dict[str, Any]:
-        """
+        r"""
         Fit ``jump_distribution`` to the data and record its goodness of fit.
 
         Parameters:
@@ -57,7 +57,7 @@ class JumpDistributionComparison:
             Jump-size distribution to fit.
         seed : int, optional
             Random seed for the simulation-based KS test.
-        **estimate_kwargs : dict
+        \*\*estimate_kwargs : dict
             Additional arguments forwarded to
             ``JumpDiffusionEstimator.estimate``.
 
