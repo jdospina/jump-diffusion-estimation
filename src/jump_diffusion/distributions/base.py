@@ -44,6 +44,18 @@ class JumpDistribution(ABC):
     ) -> Dict[str, float]:
         """Heuristic initial parameter guess derived from data moments."""
 
+    def characteristic_scale(self, params: Dict[str, float]) -> float:
+        """
+        Rough scale of the jump size, used to size the FFT/inverse-CDF grids
+        in :meth:`fft_convolved_pdf` and :meth:`rvs`.
+
+        Default reads ``jump_scale`` directly, the convention used by
+        ``NormalJump``/``SkewNormalJump``/``SGEDJump``. Override this for
+        distributions with a different parameterization (e.g. ``KouJump``,
+        which has separate up/down scales instead of a single one).
+        """
+        return params.get("jump_scale", 1.0)
+
     def diffusion_convolved_pdf(
         self,
         x: np.ndarray,
@@ -81,7 +93,7 @@ class JumpDistribution(ABC):
         evaluate at the requested points.
         """
         x = np.asarray(x, dtype=float)
-        jump_std = params.get("jump_scale")
+        jump_std = self.characteristic_scale(params)
         if jump_std is None or jump_std <= 0:
             return np.zeros_like(x)
 
@@ -127,7 +139,7 @@ class JumpDistribution(ABC):
         -- so that simulations stay reproducible. Pass an explicit
         ``np.random.Generator`` for an isolated, independent stream.
         """
-        jump_std = params.get("jump_scale", 1.0)
+        jump_std = self.characteristic_scale(params)
         h = jump_std / 200.0
         m = 2**12  # a coarser grid than fft_convolved_pdf suffices here
         k = np.arange(-m + 0.5, m, 1.0)

@@ -87,24 +87,24 @@ black src/ tests/
 ### Adding New Distributions
 1. Create a module in `distributions/` with a class inheriting from `JumpDistribution`
 2. Implement `pdf`, `default_params`, `param_bounds`, and `initial_guess`
-3. If a closed-form density is known for (diffusion + jump), override `diffusion_convolved_pdf`; otherwise the generic FFT-based convolution fallback handles it automatically (see `SGEDJump` for an example without a closed form, and `SkewNormalJump`/`NormalJump` for examples with one)
+3. If a closed-form density is known for (diffusion + jump), override `diffusion_convolved_pdf`; otherwise the generic FFT-based convolution fallback handles it automatically (see `SGEDJump` for an example without a closed form, and `SkewNormalJump`/`NormalJump`/`KouJump` for examples with one)
 4. If a fast native sampler exists, override `rvs`; otherwise the generic inverse-CDF fallback is used
-5. Export it from `distributions/__init__.py`
-6. Add tests: the pdf should integrate to 1, `diffusion_convolved_pdf` (if overridden) should match the generic FFT fallback within its numerical tolerance, and MLE should recover known parameters from simulated data
+5. If your parameters don't include a single `jump_scale` key (e.g. `KouJump`'s separate up/down scales), override `characteristic_scale` too — the FFT/inverse-CDF fallbacks use it to size their grids and silently return zeros without it
+6. Export it from `distributions/__init__.py`
+7. Add tests: the pdf should integrate to 1, `diffusion_convolved_pdf` (if overridden) should match the generic FFT fallback within its numerical tolerance, and MLE should recover known parameters from simulated data
 
 ## 🔬 Research Extensions
 
 We particularly welcome contributions in these areas:
 
 ### New Jump Distributions
-- Kou (double-exponential)
 - Student-t
 - Generalized hyperbolic distributions
 - Tempered stable distributions
 - Custom mixture distributions
 
-(Skew-normal, Normal/Merton, and the Skewed Generalized Error Distribution
-are already built in — see `distributions/`.)
+(Skew-normal, Normal/Merton, the Skewed Generalized Error Distribution, and
+Kou's double-exponential are already built in — see `distributions/`.)
 
 ### Advanced Models
 - Multiple jump types per period

@@ -68,13 +68,14 @@ a simulation-based Kolmogorov-Smirnov test:
 
 .. code-block:: python
 
-   from jump_diffusion.distributions import NormalJump, SGEDJump, SkewNormalJump
+   from jump_diffusion.distributions import KouJump, NormalJump, SGEDJump, SkewNormalJump
    from jump_diffusion.validation import JumpDistributionComparison
 
    comparison = JumpDistributionComparison(increments, dt)
    comparison.fit("Normal", NormalJump())
    comparison.fit("SkewNormal", SkewNormalJump())
    comparison.fit("SGED", SGEDJump())
+   comparison.fit("Kou", KouJump())
 
    print(comparison.compare())  # ranked by AIC, includes KS statistic/p-value
    comparison.plot_comparison()
