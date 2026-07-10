@@ -91,6 +91,16 @@ results = estimator.estimate()
 
 Distributions without a known closed-form likelihood (like SGED) fall back to a generic FFT-based convolution to approximate the mixture density, so adding a new distribution only requires implementing its `pdf`.
 
+### Robust estimation with differential evolution
+
+The default `L-BFGS-B` optimizer needs a reasonable initial guess and can stall on harder mixture likelihoods (SGED in particular). Differential evolution searches globally instead, needing no initial guess — the applied finding of the thesis this library is based on:
+
+```python
+results = estimator.estimate(method="differential_evolution", seed=42)
+```
+
+It costs thousands of likelihood evaluations (seconds instead of milliseconds), with defaults ported from the thesis (rand/1 strategy, `DEoptim`-style population sizing, early stopping on convergence).
+
 ### Comparing jump distributions
 
 `JumpDistributionComparison` fits several candidate jump distributions to the same data and ranks them by AIC/BIC plus a simulation-based Kolmogorov-Smirnov test:
