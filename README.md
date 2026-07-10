@@ -114,8 +114,8 @@ Ready-to-run scripts are available in the `examples/` directory:
 
 - [basic_usage.py](examples/basic_usage.py) – demonstrates basic library usage
 - [validation_experiment.py](examples/validation_experiment.py) – runs Monte Carlo validation experiments
-- [jump_diffusion_playground.ipynb](notebooks/jump_diffusion_playground.ipynb) – interactive playground with sliders to explore simulation and estimation
-- [sp500_jump_diffusion_example.ipynb](notebooks/sp500_jump_diffusion_example.ipynb) – applies the model to real S&P 500 data, from parameter estimation to comparing simulated vs. real return distributions
+- [jump_diffusion_playground.ipynb](notebooks/jump_diffusion_playground.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/jump_diffusion_playground.ipynb) – interactive playground: pick a jump distribution (Normal, Skew-Normal, SGED, Kou, Student-t), simulate, and try the "guess the parameters" game
+- [sp500_jump_diffusion_example.ipynb](notebooks/sp500_jump_diffusion_example.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/sp500_jump_diffusion_example.ipynb) – applies the model to real S&P 500 data: parameter estimation, simulated-vs-real comparison, and ranking all five jump distributions by AIC/BIC/KS
 
 ### Notebook setup
 
