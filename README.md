@@ -101,6 +101,21 @@ results = estimator.estimate(method="differential_evolution", seed=42)
 
 It costs thousands of likelihood evaluations (seconds instead of milliseconds), with defaults ported from the thesis (rand/1 strategy, `DEoptim`-style population sizing, early stopping on convergence).
 
+### Standard errors via Likelihood Profiling
+
+In complex jump-diffusion mixture models, the numerical Hessian is often unstable or ill-conditioned. Standard errors and 95% confidence intervals can be robustly calculated using Profile Likelihood. After estimating the parameters (preferably with global optimization), you can run:
+
+```python
+# Compute standard errors and confidence intervals using a Wilks' theorem threshold
+se_results = estimator.estimate_standard_errors(n_points=5, confidence_level=0.95)
+
+# The results table now includes standard errors and CI bounds
+estimator.diagnostics()
+
+# Visualize the profile log-likelihood curves
+estimator.plot_profiles()
+```
+
 ### Comparing jump distributions
 
 `JumpDistributionComparison` fits several candidate jump distributions to the same data and ranks them by AIC/BIC plus a simulation-based Kolmogorov-Smirnov test:
