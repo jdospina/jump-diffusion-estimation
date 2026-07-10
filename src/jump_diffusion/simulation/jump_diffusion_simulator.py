@@ -108,6 +108,7 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         path=None,
         jumps=None,
         figsize=(12, 8),
+        show_theoretical=True,
     ):
         """
         Plot simulation results with comprehensive diagnostics.
@@ -127,6 +128,18 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
             simulation is used.
         figsize : tuple, optional
             Figure size passed to :func:`matplotlib.pyplot.subplots`.
+        show_theoretical : bool, optional
+            When ``True`` (default) and at least one jump was realized,
+            overlay the jump distribution's theoretical ``pdf`` (evaluated at
+            ``self.jump_distribution`` / ``self._jump_params()``) on top of
+            the empirical jump-size histogram, so the plot doubles as a
+            visual check that simulated jumps match the selected
+            distribution's shape.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The created figure, e.g. for further customization or testing.
 
         Notes
         -----
@@ -210,7 +223,21 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
                 alpha=0.7,
                 color="orange",
                 edgecolor="black",
+                label="Simulated",
             )
+            if show_theoretical:
+                x_grid = np.linspace(actual_jumps.min(), actual_jumps.max(), 200)
+                theoretical_density = self.jump_distribution.pdf(
+                    x_grid, self._jump_params()
+                )
+                axes[1, 1].plot(
+                    x_grid,
+                    theoretical_density,
+                    color="darkred",
+                    linewidth=2,
+                    label="Theoretical pdf",
+                )
+                axes[1, 1].legend()
             axes[1, 1].set_title("Jump Size Distribution")
         else:
             axes[1, 1].text(
@@ -227,3 +254,5 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
 
         plt.tight_layout()
         plt.show()
+
+        return fig
