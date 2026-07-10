@@ -731,6 +731,131 @@ class JumpDiffusionEstimator(BaseEstimator):
             "confidence_intervals": confidence_intervals,
         }
 
+    def estimate_bootstrap_standard_errors(
+        self,
+        n_bootstrap: int = 200,
+        confidence_level: float = 0.95,
+        seed: Optional[int] = None,
+        **estimate_kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Estimate standard errors and confidence intervals by parametric
+        bootstrap.
+
+        This is the third inference route in the library, alongside the
+        profile likelihood intervals of :meth:`estimate_standard_errors` and
+        the Wald intervals of :meth:`estimate_wald_standard_errors`. It makes
+        no asymptotic-normality or regularity assumption, so it is the most
+        trustworthy of the three near a boundary (e.g. the jump probability
+        approaching zero) -- at the cost of re-fitting the model
+        ``n_bootstrap`` times.
+
+        The procedure is the textbook parametric bootstrap: treat the fitted
+        parameters as if they were the truth, simulate ``n_bootstrap`` fresh
+        datasets of the same length from that model, re-estimate the
+        parameters on each, and read the sampling variability directly off
+        the resulting replicate estimates. Standard errors are their
+        (ddof=1) standard deviation and confidence intervals are percentile
+        intervals.
+
+        Parameters:
+        -----------
+        n_bootstrap : int
+            Number of bootstrap replicates (model re-fits). More replicates
+            reduce Monte Carlo error in the standard errors and intervals
+            but scale the cost linearly.
+        confidence_level : float
+            Confidence level for the percentile intervals (e.g. 0.95).
+        seed : int, optional
+            Base seed for reproducibility. When given, replicate ``b`` is
+            simulated with seed ``seed + b``; when ``None`` the replicates
+            draw from NumPy's global random state and are not reproducible.
+        \\*\\*estimate_kwargs : dict
+            Forwarded to :meth:`estimate` for each replicate re-fit (e.g.
+            ``method="differential_evolution"``). Defaults to the same
+            gradient-based fit used elsewhere.
+
+        Returns:
+        --------
+        dict
+            Dictionary with ``standard_errors`` and
+            ``confidence_intervals`` (each keyed by parameter name), plus
+            ``n_successful`` -- the number of replicates whose re-fit
+            converged and contributed to the estimates. Non-converged
+            replicates are discarded. If fewer than two replicates succeed,
+            all standard errors and interval endpoints are ``nan``. The
+            results are also stored on ``self.results`` under
+            ``bootstrap_standard_errors``, ``bootstrap_confidence_intervals``
+            and ``bootstrap_estimates`` (the raw replicate matrix).
+
+        Raises:
+        -------
+        ValueError
+            If the model has not been fitted yet.
+        """
+        if not self.fitted or self.results is None:
+            raise ValueError("Model must be fitted first.")
+        results = self.results
+
+        fitted_params = results["parameters"]
+        jump_dist = self._model.jump_distribution
+
+        # Data-generating model: the fitted parameters treated as truth.
+        model = JumpDiffusionModel(jump_distribution=jump_dist, **fitted_params)
+        n_steps = self.n_obs
+        horizon = n_steps * self.dt
+
+        replicates: List[List[float]] = []
+        for b in range(n_bootstrap):
+            rep_seed = None if seed is None else seed + b
+            _, path, _ = model.simulate(
+                T=horizon, n_steps=n_steps, x0=0.0, seed=rep_seed
+            )
+            increments = np.diff(path)
+
+            estimator = JumpDiffusionEstimator(
+                increments, self.dt, jump_distribution=jump_dist
+            )
+            rep_result = estimator.estimate(**estimate_kwargs)
+            if rep_result["convergence"]:
+                rep_params = rep_result["parameters"]
+                replicates.append([rep_params[name] for name in self._param_names])
+
+        n_successful = len(replicates)
+
+        standard_errors: Dict[str, float] = {}
+        confidence_intervals: Dict[str, Tuple[float, float]] = {}
+
+        alpha = 1.0 - confidence_level
+        lower_pct, upper_pct = 100.0 * alpha / 2.0, 100.0 * (1.0 - alpha / 2.0)
+
+        if n_successful >= 2:
+            estimates = np.asarray(replicates, dtype=float)
+            ses = np.std(estimates, axis=0, ddof=1)
+            ci_lows = np.percentile(estimates, lower_pct, axis=0)
+            ci_highs = np.percentile(estimates, upper_pct, axis=0)
+            for idx, name in enumerate(self._param_names):
+                standard_errors[name] = float(ses[idx])
+                confidence_intervals[name] = (
+                    float(ci_lows[idx]),
+                    float(ci_highs[idx]),
+                )
+        else:
+            estimates = np.asarray(replicates, dtype=float)
+            for name in self._param_names:
+                standard_errors[name] = np.nan
+                confidence_intervals[name] = (np.nan, np.nan)
+
+        results["bootstrap_standard_errors"] = standard_errors
+        results["bootstrap_confidence_intervals"] = confidence_intervals
+        results["bootstrap_estimates"] = estimates
+
+        return {
+            "standard_errors": standard_errors,
+            "confidence_intervals": confidence_intervals,
+            "n_successful": n_successful,
+        }
+
     def plot_profiles(self, figsize: Tuple[float, float] = (15, 10)) -> None:
         """
         Plot the profile log-likelihood curves for each parameter.
