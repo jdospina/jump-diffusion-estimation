@@ -137,6 +137,7 @@ comparison.plot_comparison()
 
 Ready-to-run scripts are available in the `examples/` directory:
 
+- **[tutorial_completo.ipynb](notebooks/tutorial_completo.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/tutorial_completo.ipynb) – the canonical, end-to-end tutorial: simulate, estimate (L-BFGS-B and Differential Evolution), quantify uncertainty via all three inference routes (profile / Wald / bootstrap), test for jumps, and compare jump distributions. Start here.**
 - [basic_usage.py](examples/basic_usage.py) – demonstrates basic library usage
 - [validation_experiment.py](examples/validation_experiment.py) – runs Monte Carlo validation experiments
 - [jump_diffusion_playground.ipynb](notebooks/jump_diffusion_playground.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/jump_diffusion_playground.ipynb) – interactive playground: pick a jump distribution (Normal, Skew-Normal, SGED, Kou, Student-t), simulate, and try the "guess the parameters" game
