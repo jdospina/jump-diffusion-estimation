@@ -243,7 +243,9 @@ class ValidationExperiment:
             "jump_scale_up": "Jump Scale Up (η_up)",
             "jump_scale_down": "Jump Scale Down (η_down)",
         }
-        param_labels = [label_map.get(p, p.replace("_", " ").title()) for p in param_names]
+        param_labels = [
+            label_map.get(p, p.replace("_", " ").title()) for p in param_names
+        ]
 
         n_plots = len(param_names) + 1
         n_cols = 3

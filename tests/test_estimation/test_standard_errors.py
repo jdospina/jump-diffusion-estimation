@@ -1,7 +1,6 @@
 """Unit tests for the likelihood profiling standard errors calculation."""
 
 import numpy as np
-import pytest
 from jump_diffusion.distributions import NormalJump
 from jump_diffusion.estimation import JumpDiffusionEstimator
 from jump_diffusion.simulation import JumpDiffusionSimulator
@@ -47,14 +46,14 @@ def test_standard_errors_calculation_runs_and_estimates():
     # Run diagnostics to verify it prints standard errors table without crashing
     import io
     import sys
-    
+
     captured_output = io.StringIO()
     sys.stdout = captured_output
     try:
         estimator.diagnostics()
     finally:
         sys.stdout = sys.__stdout__
-        
+
     output_str = captured_output.getvalue()
     assert "Parameter" in output_str
     assert "Estimate" in output_str
