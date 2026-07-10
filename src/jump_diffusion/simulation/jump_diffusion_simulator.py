@@ -158,15 +158,18 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
             times = np.linspace(0, 1, len(self.last_path))
             path = self.last_path
             jumps = self.last_jumps
+            jump_times = self.last_jump_times
+        else:
+            jump_times = np.where(jumps != 0)[0] if jumps is not None else np.array([], dtype=int)
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
 
         # Main trajectory plot
         axes[0, 0].plot(times, path, "b-", linewidth=1.5, alpha=0.8)
-        if len(self.last_jump_times) > 0:
+        if len(jump_times) > 0:
             axes[0, 0].scatter(
-                times[1:][self.last_jump_times],
-                path[1:][self.last_jump_times],
+                times[1:][jump_times],
+                path[1:][jump_times],
                 color="red",
                 s=30,
                 alpha=0.7,
@@ -178,11 +181,11 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         axes[0, 0].grid(True, alpha=0.3)
 
         # Jump magnitudes
-        if len(self.last_jump_times) > 0:
-            jump_magnitudes = jumps[self.last_jump_times]
-            axes[0, 1].stem(self.last_jump_times, jump_magnitudes, basefmt=" ")
+        if len(jump_times) > 0 and jumps is not None:
+            jump_magnitudes = jumps[jump_times]
+            axes[0, 1].stem(jump_times, jump_magnitudes, basefmt=" ")
             axes[0, 1].set_title(
-                f"Detected Jumps (Total: {len(self.last_jump_times)})",
+                f"Detected Jumps (Total: {len(jump_times)})",
             )
         else:
             axes[0, 1].text(
@@ -214,7 +217,7 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         axes[1, 0].grid(True, alpha=0.3)
 
         # Jump size distribution
-        if len(self.last_jump_times) > 0:
+        if len(jump_times) > 0 and jumps is not None:
             actual_jumps = jumps[jumps != 0]
             axes[1, 1].hist(
                 actual_jumps,

@@ -8,9 +8,10 @@ controlled experiments with known parameters.
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from ..simulation import JumpDiffusionSimulator
 from ..estimation import JumpDiffusionEstimator
+from ..distributions import JumpDistribution
 
 
 class ValidationExperiment:
@@ -22,7 +23,11 @@ class ValidationExperiment:
     can recover those parameters.
     """
 
-    def __init__(self, true_params: Dict[str, float]):
+    def __init__(
+        self,
+        true_params: Dict[str, float],
+        jump_distribution: Optional[JumpDistribution] = None,
+    ):
         """
         Initialize validation experiment.
 
@@ -30,8 +35,11 @@ class ValidationExperiment:
         -----------
         true_params : dict
             True parameter values to use for simulation
+        jump_distribution : JumpDistribution, optional
+            Jump size distribution to use for simulation and estimation
         """
         self.true_params = true_params
+        self.jump_distribution = jump_distribution
         self.results: pd.DataFrame = pd.DataFrame()
         self.completed_experiments = 0
 
@@ -67,10 +75,11 @@ class ValidationExperiment:
         print(f"Running {n_simulations} validation experiments...")
         print(f"True parameters: {self.true_params}")
 
-        # Create simulator. true_params is Dict[str, float] (never
-        # contains "jump_distribution"), but mypy can't verify that from
-        # a **-unpack against a keyword with a non-float type.
-        simulator = JumpDiffusionSimulator(**self.true_params)  # type: ignore[arg-type]
+        # Create simulator.
+        simulator = JumpDiffusionSimulator(
+            jump_distribution=self.jump_distribution,
+            **self.true_params,  # type: ignore[arg-type]
+        )
 
         results: List[Dict[str, Any]] = []
         successful_runs = 0
@@ -86,7 +95,11 @@ class ValidationExperiment:
                 increments = np.diff(path)
                 dt = times[1] - times[0]
 
-                estimator = JumpDiffusionEstimator(increments, dt)
+                estimator = JumpDiffusionEstimator(
+                    increments,
+                    dt,
+                    jump_distribution=self.jump_distribution,
+                )
                 est_results = estimator.estimate()
 
                 if est_results["convergence"]:
@@ -157,7 +170,7 @@ class ValidationExperiment:
             print("No results to analyze. Run experiment first.")
             return {}
 
-        param_names = ["mu", "sigma", "jump_prob", "jump_scale", "jump_skew"]
+        param_names = [col[:-4] for col in self.results.columns if col.endswith("_est")]
         analysis = {}
 
         print("\n" + "=" * 60)
@@ -205,7 +218,7 @@ class ValidationExperiment:
 
         Notes
         -----
-        Generates a 2x3 grid of subplots showing scatter plots for
+        Generates a grid of subplots showing scatter plots for
         each parameter and a summary bar chart of bias and RMSE. The
         :meth:`run_experiment` method must be called beforehand to
         populate ``self.results``. This function displays the plots
@@ -215,16 +228,28 @@ class ValidationExperiment:
             print("No results to plot. Run experiment first.")
             return
 
-        param_names = ["mu", "sigma", "jump_prob", "jump_scale", "jump_skew"]
-        param_labels = [
-            "Drift (μ)",
-            "Volatility (σ)",
-            "Jump Prob (p)",
-            "Jump Scale (ω)",
-            "Skewness (α)",
-        ]
+        param_names = [col[:-4] for col in self.results.columns if col.endswith("_est")]
+        label_map = {
+            "mu": "Drift (μ)",
+            "sigma": "Volatility (σ)",
+            "jump_prob": "Jump Prob (p)",
+            "jump_scale": "Jump Scale",
+            "jump_skew": "Skewness (α)",
+            "jump_loc": "Jump Location",
+            "jump_nu": "Kurtosis (ν)",
+            "jump_xi": "Asymmetry (ξ)",
+            "jump_df": "Degrees of Freedom (df)",
+            "jump_prob_up": "Jump Prob Up (p_up)",
+            "jump_scale_up": "Jump Scale Up (η_up)",
+            "jump_scale_down": "Jump Scale Down (η_down)",
+        }
+        param_labels = [label_map.get(p, p.replace("_", " ").title()) for p in param_names]
 
-        fig, axes = plt.subplots(2, 3, figsize=figsize)
+        n_plots = len(param_names) + 1
+        n_cols = 3
+        n_rows = int(np.ceil(n_plots / n_cols))
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
         axes = axes.flatten()
 
         # Parameter accuracy plots
@@ -277,7 +302,7 @@ class ValidationExperiment:
                 ax.legend()
 
         # Summary statistics plot
-        ax = axes[5]
+        ax = axes[len(param_names)]
         param_biases = []
         for param in param_names:
             param_biases.append(np.mean(self.results[f"{param}_rel_error"]))
@@ -313,6 +338,10 @@ class ValidationExperiment:
         ax.set_xticklabels(param_labels, rotation=45)
         ax.legend()
         ax.grid(True, alpha=0.3)
+
+        # Delete unused subplots
+        for j in range(n_plots, len(axes)):
+            fig.delaxes(axes[j])
 
         plt.tight_layout()
         plt.show()
