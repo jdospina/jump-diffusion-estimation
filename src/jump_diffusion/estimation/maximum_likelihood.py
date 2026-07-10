@@ -302,6 +302,243 @@ class JumpDiffusionEstimator(BaseEstimator):
                 **de_kwargs,
             )
 
+    def estimate_standard_errors(
+        self,
+        n_points: int = 7,
+        confidence_level: float = 0.95,
+        grid_width_factor: float = 3.0,
+    ) -> Dict[str, Any]:
+        """
+        Estimate parameter standard errors and confidence intervals using
+        likelihood profiling.
+
+        Parameters:
+        -----------
+        n_points : int
+            Number of points to evaluate in the grid for profiling.
+        confidence_level : float
+            Confidence level for the intervals (e.g. 0.95 for 95% confidence).
+        grid_width_factor : float
+            Factor determining the width of the grid around the MLE.
+
+        Returns:
+        --------
+        dict
+            Dictionary containing standard errors and confidence intervals.
+        """
+        if not self.fitted or self.results is None:
+            raise ValueError("Model must be fitted first.")
+
+        opt_params = self.results["parameters"]
+        opt_param_vals = np.array([opt_params[name] for name in self._param_names])
+        opt_log_lik = self.results["log_likelihood"]
+
+        standard_errors = {}
+        confidence_intervals = {}
+        profile_data = {}
+
+        # Critical chi-squared value for the profile likelihood threshold (Wilks' theorem)
+        critical_val = stats.chi2.ppf(confidence_level, df=1)
+        threshold = opt_log_lik - 0.5 * critical_val
+
+        # Get optimization bounds
+        bounds = self._model.get_parameter_bounds()
+
+        for idx, param_name in enumerate(self._param_names):
+            mle_val = opt_param_vals[idx]
+
+            # Approximate a reasonable search scale (standard error heuristic)
+            if param_name == "mu":
+                se_heur = max(0.1 * abs(mle_val), 0.1)
+            elif param_name == "sigma":
+                se_heur = max(0.1 * mle_val, 0.05)
+            elif param_name == "jump_prob":
+                se_heur = max(0.1 * mle_val, 0.01)
+            else:
+                se_heur = max(0.1 * abs(mle_val), 0.05)
+
+            # Generate grid
+            low_bound, high_bound = bounds[idx]
+            min_val = mle_val - grid_width_factor * se_heur
+            max_val = mle_val + grid_width_factor * se_heur
+
+            if low_bound is not None:
+                min_val = max(min_val, low_bound + 1e-5)
+            if high_bound is not None:
+                max_val = min(max_val, high_bound - 1e-5)
+
+            grid = np.linspace(min_val, max_val, n_points)
+            # Make sure MLE is in the grid or close to it
+            if mle_val not in grid:
+                grid = np.sort(np.unique(np.concatenate([grid, [mle_val]])))
+
+            profile_vals = []
+
+            # Save optimization state for parameters other than param_name
+            for val in grid:
+                if np.isclose(val, mle_val):
+                    profile_vals.append(opt_log_lik)
+                    continue
+
+                # Optimize over remaining parameters
+                def neg_log_lik_profile(free_params):
+                    full_params = np.zeros(len(self._param_names))
+                    full_params[idx] = val
+                    free_idx = 0
+                    for j in range(len(self._param_names)):
+                        if j != idx:
+                            full_params[j] = free_params[free_idx]
+                            free_idx += 1
+                    return self.log_likelihood(full_params)
+
+                free_init = [opt_param_vals[j] for j in range(len(self._param_names)) if j != idx]
+                free_bounds = [bounds[j] for j in range(len(self._param_names)) if j != idx]
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    res = minimize(
+                        fun=neg_log_lik_profile,
+                        x0=free_init,
+                        method="L-BFGS-B",
+                        bounds=free_bounds,
+                        options={"maxiter": 100, "ftol": 1e-6},
+                    )
+
+                if res.success and np.isfinite(res.fun):
+                    profile_vals.append(-res.fun)
+                else:
+                    profile_vals.append(-np.inf)
+
+            grid = np.array(grid)
+            profile_vals = np.array(profile_vals)
+
+            valid_mask = np.isfinite(profile_vals)
+            grid_valid = grid[valid_mask]
+            profile_valid = profile_vals[valid_mask]
+
+            se_val = np.nan
+            ci_low, ci_high = np.nan, np.nan
+
+            if len(profile_valid) >= 3:
+                # Fit parabola: y = a*x^2 + b*x + c
+                fit_mask = profile_valid >= (opt_log_lik - 5.0)
+                if np.sum(fit_mask) >= 3:
+                    p_coefs = np.polyfit(grid_valid[fit_mask], profile_valid[fit_mask], 2)
+                    a = p_coefs[0]
+                    if a < 0:
+                        se_val = np.sqrt(-1.0 / (2.0 * a))
+
+                # Find roots where L_p(x) == threshold using linear interpolation
+                left_mask = grid_valid <= mle_val
+                grid_left = grid_valid[left_mask]
+                prof_left = profile_valid[left_mask]
+                if len(prof_left) >= 2 and prof_left[0] < threshold:
+                    ci_low = float(np.interp(threshold, prof_left, grid_left))
+                else:
+                    ci_low = float(min_val)
+
+                right_mask = grid_valid >= mle_val
+                grid_right = grid_valid[right_mask]
+                prof_right = profile_valid[right_mask]
+                if len(prof_right) >= 2 and prof_right[-1] < threshold:
+                    ci_high = float(np.interp(threshold, prof_right[::-1], grid_right[::-1]))
+                else:
+                    ci_high = float(max_val)
+
+            standard_errors[param_name] = se_val
+            confidence_intervals[param_name] = (ci_low, ci_high)
+            profile_data[param_name] = {
+                "grid": grid.tolist(),
+                "values": profile_vals.tolist(),
+                "threshold": threshold,
+            }
+
+        self.results["standard_errors"] = standard_errors
+        self.results["confidence_intervals"] = confidence_intervals
+        self.results["profile_data"] = profile_data
+
+        return {
+            "standard_errors": standard_errors,
+            "confidence_intervals": confidence_intervals,
+        }
+
+    def plot_profiles(self, figsize: Tuple[float, float] = (15, 10)) -> None:
+        """
+        Plot the profile log-likelihood curves for each parameter.
+        """
+        if not self.fitted or self.results is None or "profile_data" not in self.results:
+            print("Profile data not available. Run estimate_standard_errors() first.")
+            return
+
+        import matplotlib.pyplot as plt
+
+        profile_data = self.results["profile_data"]
+        standard_errors = self.results["standard_errors"]
+        confidence_intervals = self.results["confidence_intervals"]
+        opt_params = self.results["parameters"]
+
+        label_map = {
+            "mu": "Drift (μ)",
+            "sigma": "Volatility (σ)",
+            "jump_prob": "Jump Prob (p)",
+            "jump_scale": "Jump Scale",
+            "jump_skew": "Skewness (α)",
+            "jump_loc": "Jump Location",
+            "jump_nu": "Kurtosis (ν)",
+            "jump_xi": "Asymmetry (ξ)",
+            "jump_df": "Degrees of Freedom (df)",
+            "jump_prob_up": "Jump Prob Up (p_up)",
+            "jump_scale_up": "Jump Scale Up (η_up)",
+            "jump_scale_down": "Jump Scale Down (η_down)",
+        }
+
+        n_plots = len(self._param_names)
+        n_cols = min(3, n_plots)
+        n_rows = int(np.ceil(n_plots / n_cols))
+
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
+        if n_plots == 1:
+            axes = np.array([axes])
+        else:
+            axes = axes.flatten()
+
+        for idx, name in enumerate(self._param_names):
+            ax = axes[idx]
+            data = profile_data[name]
+            grid = np.array(data["grid"])
+            values = np.array(data["values"])
+            threshold = data["threshold"]
+            mle_val = opt_params[name]
+            se = standard_errors[name]
+            ci_low, ci_high = confidence_intervals[name]
+
+            # Filter finite values for plotting
+            valid = np.isfinite(values)
+            ax.plot(grid[valid], values[valid], "b-o", label="Profile Log-Lik")
+            ax.axvline(x=mle_val, color="red", linestyle="--", label=f"MLE: {mle_val:.4f}")
+            ax.axhline(y=threshold, color="green", linestyle=":", label="95% CI Threshold")
+
+            if np.isfinite(ci_low) and ci_low > grid.min():
+                ax.axvline(x=ci_low, color="green", linestyle="--", alpha=0.7)
+            if np.isfinite(ci_high) and ci_high < grid.max():
+                ax.axvline(x=ci_high, color="green", linestyle="--", alpha=0.7)
+
+            label = label_map.get(name, name.replace("_", " ").title())
+            se_str = f", SE: {se:.4f}" if np.isfinite(se) else ""
+            ax.set_title(f"{label}{se_str}")
+            ax.set_xlabel("Value")
+            ax.set_ylabel("Log-Likelihood")
+            ax.grid(True, alpha=0.3)
+            if idx == 0:
+                ax.legend()
+
+        # Delete unused subplots
+        for j in range(n_plots, len(axes)):
+            fig.delaxes(axes[j])
+
+        plt.tight_layout()
+        plt.show()
+
     def diagnostics(self) -> None:
         """Print diagnostic information about the estimation.
 
@@ -321,15 +558,30 @@ class JumpDiffusionEstimator(BaseEstimator):
             return
 
         params = self.results["parameters"]
+        se_dict = self.results.get("standard_errors", {})
+        ci_dict = self.results.get("confidence_intervals", {})
 
         print("=" * 60)
         print("JUMP-DIFFUSION ESTIMATION RESULTS")
         print("=" * 60)
-        print(f"Drift (μ):              {params['mu']:.6f}")
-        print(f"Volatility (σ):         {params['sigma']:.6f}")
-        print(f"Jump probability (p):   {params['jump_prob']:.6f}")
-        for name in self._model.jump_distribution.param_names:
-            print(f"{name:<24}{params[name]:.6f}")
+
+        if se_dict:
+            print(f"{'Parameter':<18} | {'Estimate':<10} | {'Std Error':<10} | {'95% Conf. Interval':<22}")
+            print("-" * 68)
+            for name in self._param_names:
+                val = params[name]
+                se = se_dict.get(name, np.nan)
+                se_str = f"{se:.6f}" if np.isfinite(se) else "N/A"
+                ci = ci_dict.get(name, (np.nan, np.nan))
+                ci_str = f"[{ci[0]:.4f}, {ci[1]:.4f}]" if np.all(np.isfinite(ci)) else "N/A"
+                print(f"{name:<18} | {val:<10.6f} | {se_str:<10} | {ci_str:<22}")
+        else:
+            print(f"Drift (μ):              {params['mu']:.6f}")
+            print(f"Volatility (σ):         {params['sigma']:.6f}")
+            print(f"Jump probability (p):   {params['jump_prob']:.6f}")
+            for name in self._model.jump_distribution.param_names:
+                print(f"{name:<24}{params[name]:.6f}")
+
         print(
             f"\nLog-likelihood:         {self.results['log_likelihood']:.2f}",
         )
