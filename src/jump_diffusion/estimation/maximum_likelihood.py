@@ -347,40 +347,12 @@ class JumpDiffusionEstimator(BaseEstimator):
         for idx, param_name in enumerate(self._param_names):
             mle_val = opt_param_vals[idx]
 
-            # Approximate a reasonable search scale (standard error heuristic)
-            if param_name == "mu":
-                se_heur = max(0.1 * abs(mle_val), 0.01)
-            elif param_name == "sigma":
-                se_heur = max(0.1 * mle_val, 0.01)
-            elif param_name == "jump_prob":
-                se_heur = max(0.1 * mle_val, 0.005)
-            else:
-                se_heur = max(0.1 * abs(mle_val), 0.005)
-
-            # Generate grid
+            # Initialize profile dictionary with MLE
+            profile_dict = {mle_val: opt_log_lik}
             low_bound, high_bound = bounds[idx]
-            min_val = mle_val - grid_width_factor * se_heur
-            max_val = mle_val + grid_width_factor * se_heur
-
-            if low_bound is not None:
-                min_val = max(min_val, low_bound + 1e-5)
-            if high_bound is not None:
-                max_val = min(max_val, high_bound - 1e-5)
-
-            grid = np.linspace(min_val, max_val, n_points)
-            # Make sure MLE is in the grid or close to it
-            if mle_val not in grid:
-                grid = np.sort(np.unique(np.concatenate([grid, [mle_val]])))
-
-            profile_vals = []
-
-            # Save optimization state for parameters other than param_name
-            for val in grid:
-                if np.isclose(val, mle_val):
-                    profile_vals.append(opt_log_lik)
-                    continue
-
-                # Optimize over remaining parameters
+            
+            # Optimization closure
+            def optimize_profile(val):
                 def neg_log_lik_profile(free_params):
                     full_params = np.zeros(len(self._param_names))
                     full_params[idx] = val
@@ -390,7 +362,7 @@ class JumpDiffusionEstimator(BaseEstimator):
                             full_params[j] = free_params[free_idx]
                             free_idx += 1
                     return self.log_likelihood(full_params)
-
+                
                 free_init = [opt_param_vals[j] for j in range(len(self._param_names)) if j != idx]
                 free_bounds = [bounds[j] for j in range(len(self._param_names)) if j != idx]
 
@@ -405,16 +377,90 @@ class JumpDiffusionEstimator(BaseEstimator):
                     )
 
                 if res.success and np.isfinite(res.fun):
-                    profile_vals.append(-res.fun)
-                else:
-                    profile_vals.append(-np.inf)
+                    return -res.fun
+                return -np.inf
 
-            grid = np.array(grid)
-            profile_vals = np.array(profile_vals)
+            # Adaptive search parameters
+            initial_step = max(0.01 * abs(mle_val), 1e-4)
+            max_step_factor = 2.0
+            max_search_steps = 15
+            
+            # Outward search right
+            curr_val = mle_val
+            step = initial_step
+            for _ in range(max_search_steps):
+                next_val = curr_val + step
+                if high_bound is not None and next_val >= high_bound:
+                    next_val = high_bound - 1e-5
+                    val_lik = optimize_profile(next_val)
+                    profile_dict[next_val] = val_lik
+                    break
+                val_lik = optimize_profile(next_val)
+                profile_dict[next_val] = val_lik
+                
+                if val_lik < threshold:
+                    break
+                
+                curr_val = next_val
+                step *= max_step_factor
+                
+            # Outward search left
+            curr_val = mle_val
+            step = initial_step
+            for _ in range(max_search_steps):
+                next_val = curr_val - step
+                if low_bound is not None and next_val <= low_bound:
+                    next_val = low_bound + 1e-5
+                    val_lik = optimize_profile(next_val)
+                    profile_dict[next_val] = val_lik
+                    break
+                val_lik = optimize_profile(next_val)
+                profile_dict[next_val] = val_lik
+                
+                if val_lik < threshold:
+                    break
+                
+                curr_val = next_val
+                step *= max_step_factor
+
+            # Sort evaluated points
+            sorted_vals = sorted(list(profile_dict.keys()))
+            
+            # Infill points if we have fewer than n_points
+            while len(sorted_vals) < n_points:
+                # Find the gap with the largest absolute distance
+                max_gap_idx = -1
+                max_gap_dist = -1
+                for i in range(len(sorted_vals) - 1):
+                    v1, v2 = sorted_vals[i], sorted_vals[i+1]
+                    dist = v2 - v1
+                    if dist > max_gap_dist:
+                        max_gap_dist = dist
+                        max_gap_idx = i
+                        
+                if max_gap_idx == -1:
+                    break
+                
+                v1 = sorted_vals[max_gap_idx]
+                v2 = sorted_vals[max_gap_idx + 1]
+                mid_val = (v1 + v2) / 2.0
+                val_lik = optimize_profile(mid_val)
+                profile_dict[mid_val] = val_lik
+                sorted_vals = sorted(list(profile_dict.keys()))
+                
+            grid = np.array(sorted_vals)
+            profile_vals = np.array([profile_dict[v] for v in grid])
 
             valid_mask = np.isfinite(profile_vals)
             grid_valid = grid[valid_mask]
             profile_valid = profile_vals[valid_mask]
+            
+            if len(grid_valid) > 0:
+                min_val = grid_valid.min()
+                max_val = grid_valid.max()
+            else:
+                min_val = low_bound if low_bound is not None else mle_val - 1.0
+                max_val = high_bound if high_bound is not None else mle_val + 1.0
 
             se_val = np.nan
             ci_low, ci_high = np.nan, np.nan
