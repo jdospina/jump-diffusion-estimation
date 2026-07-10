@@ -349,13 +349,13 @@ class JumpDiffusionEstimator(BaseEstimator):
 
             # Approximate a reasonable search scale (standard error heuristic)
             if param_name == "mu":
-                se_heur = max(0.1 * abs(mle_val), 0.1)
+                se_heur = max(0.1 * abs(mle_val), 0.01)
             elif param_name == "sigma":
-                se_heur = max(0.1 * mle_val, 0.05)
-            elif param_name == "jump_prob":
                 se_heur = max(0.1 * mle_val, 0.01)
+            elif param_name == "jump_prob":
+                se_heur = max(0.1 * mle_val, 0.005)
             else:
-                se_heur = max(0.1 * abs(mle_val), 0.05)
+                se_heur = max(0.1 * abs(mle_val), 0.005)
 
             # Generate grid
             low_bound, high_bound = bounds[idx]
@@ -446,6 +446,16 @@ class JumpDiffusionEstimator(BaseEstimator):
                     ci_high = float(np.interp(threshold, prof_right[::-1], grid_right[::-1]))
                 else:
                     ci_high = float(max_val)
+                    
+                # Fallback: If parabolic fit failed (a >= 0, causing se_val=nan),
+                # estimate SE from the profile likelihood confidence interval width.
+                if not np.isfinite(se_val):
+                    if np.isfinite(ci_low) and np.isfinite(ci_high) and ci_low < ci_high:
+                        # Ensure the bounds actually crossed the threshold (are inside the grid)
+                        if ci_low > min_val + 1e-6 and ci_high < max_val - 1e-6:
+                            z_val = np.sqrt(critical_val)
+                            dist = (ci_high - ci_low) / 2.0
+                            se_val = float(dist / z_val)
 
             standard_errors[param_name] = se_val
             confidence_intervals[param_name] = (ci_low, ci_high)
