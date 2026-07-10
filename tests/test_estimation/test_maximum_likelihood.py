@@ -3,6 +3,7 @@ Unit tests for maximum likelihood estimation.
 """
 
 import numpy as np
+from jump_diffusion.distributions import KouJump
 from jump_diffusion.estimation import JumpDiffusionEstimator
 from jump_diffusion.simulation import JumpDiffusionSimulator
 
@@ -55,6 +56,20 @@ class TestJumpDiffusionEstimator:
         self.estimator.estimate()
         # This should not raise an exception
         self.estimator.diagnostics()
+
+    def test_diagnostics_with_kou_jump(self):
+        """diagnostics() must not assume a ``jump_scale`` parameter.
+
+        Regression test: KouJump parameterizes jumps as
+        (jump_prob_up, jump_scale_up, jump_scale_down), so diagnostics()
+        used to raise KeyError('jump_scale') after fitting with it.
+        """
+        estimator = JumpDiffusionEstimator(
+            self.increments, self.dt, jump_distribution=KouJump()
+        )
+        estimator.estimate()
+        # This should not raise an exception
+        estimator.diagnostics()
 
     def test_estimation_on_simulated_path(self):
         """Estimate parameters from a simulated jump-diffusion path."""
