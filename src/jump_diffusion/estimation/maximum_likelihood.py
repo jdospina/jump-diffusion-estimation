@@ -8,7 +8,7 @@ mixture likelihood implemented on the model itself.
 import numpy as np
 import warnings
 from scipy import stats
-from scipy.optimize import differential_evolution, minimize
+from scipy.optimize import Bounds, differential_evolution, minimize
 from typing import Any, Dict, List, Optional, Tuple
 from .base_estimator import BaseEstimator
 from ..models.jump_diffusion import JumpDiffusionModel
@@ -282,6 +282,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         if bounds is None:
             bounds = self._finite_bounds()
+        lows, highs = zip(*bounds)
+        de_bounds = Bounds(np.asarray(lows, float), np.asarray(highs, float))
 
         de_kwargs: Dict[str, Any] = {
             "strategy": "rand1bin",
@@ -296,7 +298,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             warnings.simplefilter("ignore")
             return differential_evolution(
                 func=self.log_likelihood,
-                bounds=bounds,
+                bounds=de_bounds,
                 **de_kwargs,
             )
 
