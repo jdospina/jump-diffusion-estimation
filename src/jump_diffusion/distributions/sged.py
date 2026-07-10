@@ -65,11 +65,12 @@ def _standardized_sged_pdf(z: np.ndarray, nu: float, xi: float) -> np.ndarray:
 class SGEDJump(JumpDistribution):
     """
     Jump sizes distributed as a Skewed Generalized Error Distribution.
-    
+
     References:
     - Ospina Arango, J. D. (2009). Tesis de Maestría. Universidad Nacional de Colombia.
-    - Theodossiou, P. (2015). Skewed Generalized Error Distribution of 
-      Financial Assets and Option Pricing. Multinational Finance Journal, 19(4), 223-266.
+    - Theodossiou, P. (2015). Skewed Generalized Error Distribution of
+      Financial Assets and Option Pricing. Multinational Finance Journal,
+      19(4), 223-266.
     """
 
     param_names: Tuple[str, ...] = ("jump_loc", "jump_scale", "jump_nu", "jump_xi")

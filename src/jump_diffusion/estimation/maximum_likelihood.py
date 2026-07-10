@@ -25,7 +25,7 @@ class JumpDiffusionEstimator(BaseEstimator):
     array of increments.
 
     References:
-    - Ardia, D., Ospina, J. D., & Giraldo, N. D. (2011). Jump-diffusion 
+    - Ardia, D., Ospina, J. D., & Giraldo, N. D. (2011). Jump-diffusion
       calibration using differential evolution. Wilmott, 2011(55), 76-79.
     """
 
@@ -342,7 +342,8 @@ class JumpDiffusionEstimator(BaseEstimator):
         confidence_intervals = {}
         profile_data = {}
 
-        # Critical chi-squared value for the profile likelihood threshold (Wilks' theorem)
+        # Critical chi-squared value for the profile likelihood threshold
+        # (Wilks' theorem)
         critical_val = stats.chi2.ppf(confidence_level, df=1)
         threshold = opt_log_lik - 0.5 * critical_val
 
@@ -355,7 +356,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             # Initialize profile dictionary with MLE
             profile_dict = {mle_val: opt_log_lik}
             low_bound, high_bound = bounds[idx]
-            
+
             # Optimization closure
             def optimize_profile(val):
                 def neg_log_lik_profile(free_params):
@@ -367,9 +368,13 @@ class JumpDiffusionEstimator(BaseEstimator):
                             full_params[j] = free_params[free_idx]
                             free_idx += 1
                     return self.log_likelihood(full_params)
-                
-                free_init = [opt_param_vals[j] for j in range(len(self._param_names)) if j != idx]
-                free_bounds = [bounds[j] for j in range(len(self._param_names)) if j != idx]
+
+                free_init = [
+                    opt_param_vals[j] for j in range(len(self._param_names)) if j != idx
+                ]
+                free_bounds = [
+                    bounds[j] for j in range(len(self._param_names)) if j != idx
+                ]
 
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
@@ -389,7 +394,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             initial_step = max(0.01 * abs(mle_val), 1e-4)
             max_step_factor = 2.0
             max_search_steps = 15
-            
+
             # Outward search right
             curr_val = mle_val
             step = initial_step
@@ -402,13 +407,13 @@ class JumpDiffusionEstimator(BaseEstimator):
                     break
                 val_lik = optimize_profile(next_val)
                 profile_dict[next_val] = val_lik
-                
+
                 if val_lik < threshold:
                     break
-                
+
                 curr_val = next_val
                 step *= max_step_factor
-                
+
             # Outward search left
             curr_val = mle_val
             step = initial_step
@@ -421,45 +426,45 @@ class JumpDiffusionEstimator(BaseEstimator):
                     break
                 val_lik = optimize_profile(next_val)
                 profile_dict[next_val] = val_lik
-                
+
                 if val_lik < threshold:
                     break
-                
+
                 curr_val = next_val
                 step *= max_step_factor
 
             # Sort evaluated points
             sorted_vals = sorted(list(profile_dict.keys()))
-            
+
             # Infill points if we have fewer than n_points
             while len(sorted_vals) < n_points:
                 # Find the gap with the largest absolute distance
                 max_gap_idx = -1
                 max_gap_dist = -1
                 for i in range(len(sorted_vals) - 1):
-                    v1, v2 = sorted_vals[i], sorted_vals[i+1]
+                    v1, v2 = sorted_vals[i], sorted_vals[i + 1]
                     dist = v2 - v1
                     if dist > max_gap_dist:
                         max_gap_dist = dist
                         max_gap_idx = i
-                        
+
                 if max_gap_idx == -1:
                     break
-                
+
                 v1 = sorted_vals[max_gap_idx]
                 v2 = sorted_vals[max_gap_idx + 1]
                 mid_val = (v1 + v2) / 2.0
                 val_lik = optimize_profile(mid_val)
                 profile_dict[mid_val] = val_lik
                 sorted_vals = sorted(list(profile_dict.keys()))
-                
+
             grid = np.array(sorted_vals)
             profile_vals = np.array([profile_dict[v] for v in grid])
 
             valid_mask = np.isfinite(profile_vals)
             grid_valid = grid[valid_mask]
             profile_valid = profile_vals[valid_mask]
-            
+
             if len(grid_valid) > 0:
                 min_val = grid_valid.min()
                 max_val = grid_valid.max()
@@ -472,11 +477,14 @@ class JumpDiffusionEstimator(BaseEstimator):
 
             if len(profile_valid) >= 3:
                 # Fit parabola: y = a*x^2 + b*x + c
-                # Use up to 5 points with the highest log-likelihood to ensure we are near the peak
-                # and avoid arbitrary absolute log-likelihood thresholds.
+                # Use up to 5 points with the highest log-likelihood to ensure
+                # we are near the peak and avoid arbitrary absolute
+                # log-likelihood thresholds.
                 n_fit_points = min(5, len(profile_valid))
                 top_indices = np.argsort(profile_valid)[-n_fit_points:]
-                p_coefs = np.polyfit(grid_valid[top_indices], profile_valid[top_indices], 2)
+                p_coefs = np.polyfit(
+                    grid_valid[top_indices], profile_valid[top_indices], 2
+                )
                 a = p_coefs[0]
                 if a < 0:
                     se_val = np.sqrt(-1.0 / (2.0 * a))
@@ -494,15 +502,22 @@ class JumpDiffusionEstimator(BaseEstimator):
                 grid_right = grid_valid[right_mask]
                 prof_right = profile_valid[right_mask]
                 if len(prof_right) >= 2 and prof_right[-1] < threshold:
-                    ci_high = float(np.interp(threshold, prof_right[::-1], grid_right[::-1]))
+                    ci_high = float(
+                        np.interp(threshold, prof_right[::-1], grid_right[::-1])
+                    )
                 else:
                     ci_high = float(max_val)
-                    
+
                 # Fallback: If parabolic fit failed (a >= 0, causing se_val=nan),
                 # estimate SE from the profile likelihood confidence interval width.
                 if not np.isfinite(se_val):
-                    if np.isfinite(ci_low) and np.isfinite(ci_high) and ci_low < ci_high:
-                        # Ensure the bounds actually crossed the threshold (are inside the grid)
+                    if (
+                        np.isfinite(ci_low)
+                        and np.isfinite(ci_high)
+                        and ci_low < ci_high
+                    ):
+                        # Ensure the bounds actually crossed the threshold
+                        # (are inside the grid)
                         if ci_low > min_val + 1e-6 and ci_high < max_val - 1e-6:
                             z_val = np.sqrt(critical_val)
                             dist = (ci_high - ci_low) / 2.0
@@ -529,7 +544,11 @@ class JumpDiffusionEstimator(BaseEstimator):
         """
         Plot the profile log-likelihood curves for each parameter.
         """
-        if not self.fitted or self.results is None or "profile_data" not in self.results:
+        if (
+            not self.fitted
+            or self.results is None
+            or "profile_data" not in self.results
+        ):
             print("Profile data not available. Run estimate_standard_errors() first.")
             return
 
@@ -578,8 +597,12 @@ class JumpDiffusionEstimator(BaseEstimator):
             # Filter finite values for plotting
             valid = np.isfinite(values)
             ax.plot(grid[valid], values[valid], "b-o", label="Profile Log-Lik")
-            ax.axvline(x=mle_val, color="red", linestyle="--", label=f"MLE: {mle_val:.4f}")
-            ax.axhline(y=threshold, color="green", linestyle=":", label="95% CI Threshold")
+            ax.axvline(
+                x=mle_val, color="red", linestyle="--", label=f"MLE: {mle_val:.4f}"
+            )
+            ax.axhline(
+                y=threshold, color="green", linestyle=":", label="95% CI Threshold"
+            )
 
             if np.isfinite(ci_low) and ci_low > grid.min():
                 ax.axvline(x=ci_low, color="green", linestyle="--", alpha=0.7)
@@ -629,14 +652,19 @@ class JumpDiffusionEstimator(BaseEstimator):
         print("=" * 60)
 
         if se_dict:
-            print(f"{'Parameter':<18} | {'Estimate':<10} | {'Std Error':<10} | {'95% Conf. Interval':<22}")
+            print(
+                f"{'Parameter':<18} | {'Estimate':<10} | "
+                f"{'Std Error':<10} | {'95% Conf. Interval':<22}"
+            )
             print("-" * 68)
             for name in self._param_names:
                 val = params[name]
                 se = se_dict.get(name, np.nan)
                 se_str = f"{se:.6f}" if np.isfinite(se) else "N/A"
                 ci = ci_dict.get(name, (np.nan, np.nan))
-                ci_str = f"[{ci[0]:.4f}, {ci[1]:.4f}]" if np.all(np.isfinite(ci)) else "N/A"
+                ci_str = (
+                    f"[{ci[0]:.4f}, {ci[1]:.4f}]" if np.all(np.isfinite(ci)) else "N/A"
+                )
                 print(f"{name:<18} | {val:<10.6f} | {se_str:<10} | {ci_str:<22}")
         else:
             print(f"Drift (μ):              {params['mu']:.6f}")

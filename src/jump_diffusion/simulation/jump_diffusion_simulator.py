@@ -160,7 +160,11 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
             jumps = self.last_jumps
             jump_times = self.last_jump_times
         else:
-            jump_times = np.where(jumps != 0)[0] if jumps is not None else np.array([], dtype=int)
+            jump_times = (
+                np.where(jumps != 0)[0]
+                if jumps is not None
+                else np.array([], dtype=int)
+            )
 
         fig, axes = plt.subplots(2, 2, figsize=figsize)
 
@@ -256,5 +260,5 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         axes[1, 1].grid(True, alpha=0.3)
 
         plt.tight_layout()
-        
+
         return fig
