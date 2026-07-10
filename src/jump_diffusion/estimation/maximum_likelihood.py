@@ -6,6 +6,7 @@ mixture likelihood implemented on the model itself.
 """
 
 import numpy as np
+import pandas as pd
 import warnings
 from scipy import stats
 from scipy.optimize import Bounds, differential_evolution, minimize
@@ -72,6 +73,18 @@ class JumpDiffusionEstimator(BaseEstimator):
         self.std_increment = float(np.std(self.increments))
         self.skewness = float(stats.skew(self.increments))
         self.kurtosis = float(stats.kurtosis(self.increments))
+
+    @property
+    def param_names(self) -> Tuple[str, ...]:
+        """
+        Ordered parameter names for this estimator.
+
+        Always ``("mu", "sigma", "jump_prob", *jump_distribution.param_names)``.
+        This is the order used by every parameter vector, standard-error and
+        confidence-interval dictionary the estimator produces, so it is the
+        natural key for iterating over results.
+        """
+        return self._param_names
 
     def log_likelihood(self, params: np.ndarray) -> float:
         """
@@ -994,6 +1007,74 @@ class JumpDiffusionEstimator(BaseEstimator):
         }
         results["jump_test"] = jump_test
         return jump_test
+
+    def summary(self) -> pd.DataFrame:
+        """
+        Tidy table of the estimates and every inference route computed so far.
+
+        Returns one row per parameter with its point ``estimate`` plus, for
+        each inference method that has been run, the standard error and
+        confidence interval bounds. Columns are only added for methods that
+        were actually computed:
+
+        * ``estimate_standard_errors`` -> ``profile_se``, ``profile_ci_low``,
+          ``profile_ci_high``
+        * ``estimate_wald_standard_errors`` -> ``wald_se``, ``wald_ci_low``,
+          ``wald_ci_high``
+        * ``estimate_bootstrap_standard_errors`` -> ``bootstrap_se``,
+          ``bootstrap_ci_low``, ``bootstrap_ci_high``
+
+        This is the structured counterpart to :meth:`diagnostics` (which
+        prints a single-method table): it puts the profile, Wald and
+        bootstrap results side by side, which is exactly what a coverage
+        comparison or a results table for a paper needs.
+
+        Returns:
+        --------
+        pandas.DataFrame
+            One row per parameter, indexed by insertion order, with an
+            ``estimate`` column and the SE/CI columns of whichever methods
+            have been run.
+
+        Raises:
+        -------
+        ValueError
+            If the model has not been fitted yet.
+        """
+        if not self.fitted or self.results is None:
+            raise ValueError("Model must be fitted first.")
+        results = self.results
+        params = results["parameters"]
+
+        # (label, standard-errors key, confidence-intervals key)
+        method_keys = [
+            ("profile", "standard_errors", "confidence_intervals"),
+            ("wald", "wald_standard_errors", "wald_confidence_intervals"),
+            (
+                "bootstrap",
+                "bootstrap_standard_errors",
+                "bootstrap_confidence_intervals",
+            ),
+        ]
+
+        rows = []
+        for name in self._param_names:
+            row: Dict[str, Any] = {
+                "parameter": name,
+                "estimate": params[name],
+            }
+            for label, se_key, ci_key in method_keys:
+                se_dict = results.get(se_key)
+                if se_dict is None:
+                    continue
+                ci_dict = results.get(ci_key) or {}
+                ci_low, ci_high = ci_dict.get(name, (np.nan, np.nan))
+                row[f"{label}_se"] = se_dict.get(name, np.nan)
+                row[f"{label}_ci_low"] = ci_low
+                row[f"{label}_ci_high"] = ci_high
+            rows.append(row)
+
+        return pd.DataFrame(rows)
 
     def plot_profiles(self, figsize: Tuple[float, float] = (15, 10)) -> None:
         """
