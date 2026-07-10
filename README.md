@@ -152,6 +152,22 @@ pip install notebook ipywidgets matplotlib
 jupyter notebook
 ```
 
+## 📖 Referencias Académicas
+
+Los métodos numéricos y modelos estadísticos implementados en esta librería están fundamentados en la siguiente literatura:
+
+1. **Calibración con Evolución Diferencial y SGED:**
+   - Ospina Arango, J. D. (2009). *Tesis de Maestría*. Universidad Nacional de Colombia. (Fundamentos de la aplicación de SGED y Evolución Diferencial a procesos de Salto-Difusión).
+   - Ardia, D., Ospina, J. D., & Giraldo, N. D. (2011). *Jump-diffusion calibration using differential evolution.* Wilmott, 2011(55), 76-79.
+   - Storn, R., & Price, K. (1997). *Differential evolution–a simple and efficient heuristic for global optimization over continuous spaces.* Journal of global optimization, 11(4), 341-359.
+
+2. **Modelos de Salto-Difusión y Distribuciones:**
+   - Merton, R. C. (1976). *Option pricing when underlying stock returns are discontinuous.* Journal of financial economics, 3(1-2), 125-144.
+   - Theodossiou, P. (2015). *Skewed Generalized Error Distribution of Financial Assets and Option Pricing.* Multinational Finance Journal, 19(4), 223-266.
+
+3. **Inferencia Estadística (Perfilado de Verosimilitud):**
+   - Wilks, S. S. (1938). *The large-sample distribution of the likelihood ratio for testing composite hypotheses.* The Annals of Mathematical Statistics, 9(1), 60-62.
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.

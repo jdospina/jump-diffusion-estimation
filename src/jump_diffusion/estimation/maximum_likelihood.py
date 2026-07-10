@@ -23,6 +23,10 @@ class JumpDiffusionEstimator(BaseEstimator):
     jump-size distribution (skew-normal by default) using mixture
     likelihood functions. The input ``data`` must be a one-dimensional
     array of increments.
+
+    References:
+    - Ardia, D., Ospina, J. D., & Giraldo, N. D. (2011). Jump-diffusion 
+      calibration using differential evolution. Wilmott, 2011(55), 76-79.
     """
 
     def __init__(
@@ -187,6 +191,7 @@ class JumpDiffusionEstimator(BaseEstimator):
             400 generations in R's ``DEoptim``) recovered the true
             parameters even under very wide bounds. The trade-off is
             computational cost (thousands of likelihood evaluations).
+            For the differential evolution algorithm, see Storn & Price (1997).
         bounds : list of (low, high) tuples, optional
             Optimization box, one pair per parameter in the order
             ``[mu, sigma, jump_prob, *jump_distribution.param_names]``.
@@ -310,7 +315,7 @@ class JumpDiffusionEstimator(BaseEstimator):
     ) -> Dict[str, Any]:
         """
         Estimate parameter standard errors and confidence intervals using
-        likelihood profiling.
+        likelihood profiling based on Wilks' theorem (Wilks, 1938).
 
         Parameters:
         -----------

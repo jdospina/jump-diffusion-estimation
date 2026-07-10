@@ -16,7 +16,13 @@ from .base import JumpDistribution
 
 
 class NormalJump(JumpDistribution):
-    """Jump sizes distributed as a normal centered at zero."""
+    """
+    Jump sizes distributed as a normal centered at zero.
+    
+    References:
+    - Merton, R. C. (1976). Option pricing when underlying stock returns 
+      are discontinuous. Journal of financial economics, 3(1-2), 125-144.
+    """
 
     param_names: Tuple[str, ...] = ("jump_scale",)
 
