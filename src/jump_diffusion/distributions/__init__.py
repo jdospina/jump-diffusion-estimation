@@ -10,6 +10,7 @@ from .kou import KouJump
 from .normal import NormalJump
 from .sged import SGEDJump
 from .skew_normal import SkewNormalJump
+from .student_t import StudentTJump
 
 __all__ = [
     "JumpDistribution",
@@ -17,4 +18,5 @@ __all__ = [
     "NormalJump",
     "SGEDJump",
     "KouJump",
+    "StudentTJump",
 ]

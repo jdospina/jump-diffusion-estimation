@@ -98,13 +98,13 @@ black src/ tests/
 We particularly welcome contributions in these areas:
 
 ### New Jump Distributions
-- Student-t
 - Generalized hyperbolic distributions
 - Tempered stable distributions
 - Custom mixture distributions
 
-(Skew-normal, Normal/Merton, the Skewed Generalized Error Distribution, and
-Kou's double-exponential are already built in — see `distributions/`.)
+(Skew-normal, Normal/Merton, the Skewed Generalized Error Distribution,
+Kou's double-exponential, and Student-t are already built in — see
+`distributions/`.)
 
 ### Advanced Models
 - Multiple jump types per period

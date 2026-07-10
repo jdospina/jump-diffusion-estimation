@@ -68,7 +68,13 @@ a simulation-based Kolmogorov-Smirnov test:
 
 .. code-block:: python
 
-   from jump_diffusion.distributions import KouJump, NormalJump, SGEDJump, SkewNormalJump
+   from jump_diffusion.distributions import (
+       KouJump,
+       NormalJump,
+       SGEDJump,
+       SkewNormalJump,
+       StudentTJump,
+   )
    from jump_diffusion.validation import JumpDistributionComparison
 
    comparison = JumpDistributionComparison(increments, dt)
@@ -76,6 +82,7 @@ a simulation-based Kolmogorov-Smirnov test:
    comparison.fit("SkewNormal", SkewNormalJump())
    comparison.fit("SGED", SGEDJump())
    comparison.fit("Kou", KouJump())
+   comparison.fit("StudentT", StudentTJump())
 
    print(comparison.compare())  # ranked by AIC, includes KS statistic/p-value
    comparison.plot_comparison()
