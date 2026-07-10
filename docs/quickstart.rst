@@ -59,6 +59,29 @@ adding a new distribution only requires implementing its ``pdf`` -- see
 :doc:`api/index` and the "Adding New Distributions" section of
 `CONTRIBUTING.md <https://github.com/jdospina/jump-diffusion-estimation/blob/main/CONTRIBUTING.md>`_.
 
+Robust estimation with differential evolution
+----------------------------------------------
+
+The default ``L-BFGS-B`` optimizer needs a reasonable initial guess: on
+harder mixture likelihoods (SGED in particular, and often on real market
+data) it can stall at a poor local solution and report
+``convergence: False``. Differential evolution -- the applied finding of
+the thesis this library is based on (Ospina Arango, 2009) -- searches a
+data-driven box globally instead, needing no initial guess at all:
+
+.. code-block:: python
+
+   estimator = JumpDiffusionEstimator(increments, dt, jump_distribution=SGEDJump())
+   results = estimator.estimate(method="differential_evolution", seed=42)
+
+The defaults port the thesis configuration (strategy rand/1, the same
+population sizing as R's ``DEoptim`` runs, up to 400 generations with
+early stopping on convergence). It costs thousands of likelihood
+evaluations, so expect seconds instead of milliseconds; pass ``seed=`` for
+reproducibility, and see
+:meth:`~jump_diffusion.estimation.JumpDiffusionEstimator.estimate` for the
+knobs (``maxiter``, ``popsize``, ``tol``, ``bounds`` ...).
+
 Comparing jump distributions
 ------------------------------
 

@@ -8,8 +8,8 @@ mixture likelihood implemented on the model itself.
 import numpy as np
 import warnings
 from scipy import stats
-from scipy.optimize import minimize
-from typing import Dict, Any, Optional
+from scipy.optimize import Bounds, differential_evolution, minimize
+from typing import Any, Dict, List, Optional, Tuple
 from .base_estimator import BaseEstimator
 from ..models.jump_diffusion import JumpDiffusionModel
 from ..distributions import JumpDistribution
@@ -93,7 +93,15 @@ class JumpDiffusionEstimator(BaseEstimator):
             return np.inf
 
         self._model.update_parameters(**dict(zip(self._param_names, params)))
-        return -self._model.log_likelihood(self.increments, self.dt)
+        value = self._model.log_likelihood(self.increments, self.dt)
+        # Penalize non-numeric likelihood values so that population-based
+        # optimizers (differential evolution) simply discard the offending
+        # candidates instead of corrupting the ranking -- same device as in
+        # Ospina Arango (2009), where NaN evaluations are mapped to a large
+        # positive constant.
+        if not np.isfinite(value):
+            return np.inf
+        return -value
 
     def _get_initial_guess(self) -> np.ndarray:
         """Generate intelligent initial parameter guess."""
@@ -111,10 +119,49 @@ class JumpDiffusionEstimator(BaseEstimator):
         ]
         return np.array(values)
 
+    def _finite_bounds(self) -> List[Tuple[float, float]]:
+        """
+        Data-driven finite search box for differential evolution.
+
+        Differential evolution samples its initial population uniformly
+        over a bounded region, so the open-ended bounds used by L-BFGS-B
+        (e.g. ``mu`` unbounded, ``sigma < inf``) must be replaced by finite
+        ones. This mirrors the :math:`\\theta_L`/:math:`\\theta_U` limits
+        in Ospina Arango (2009), whose applied result is that even *very*
+        generous boxes (little prior knowledge of the solution) still lead
+        differential evolution to the optimum where gradient methods fail.
+        Bounds that are already finite are kept as-is; only ``None`` ends
+        are replaced with wide data-driven limits.
+        """
+        initial_mu = self.mean_increment / self.dt
+        initial_sigma = self.std_increment / np.sqrt(self.dt)
+        mu_halfwidth = max(1.0, 10 * abs(initial_mu), 10 * initial_sigma)
+        # Jump parameters live on the scale of individual increments; a
+        # single jump 20x the typical increment size is a generous cap
+        # (and std_increment is itself inflated by any jumps in the data).
+        jump_cap = max(20 * self.std_increment, 1e-3)
+
+        finite = [
+            (initial_mu - mu_halfwidth, initial_mu + mu_halfwidth),  # mu
+            (1e-6, 10 * initial_sigma),  # sigma
+            (1e-6, 1 - 1e-6),  # jump_prob
+        ]
+        jump_bounds = self._model.jump_distribution.param_bounds()
+        for name in self._model.jump_distribution.param_names:
+            low, high = jump_bounds[name]
+            finite.append(
+                (
+                    -jump_cap if low is None else low,
+                    jump_cap if high is None else high,
+                )
+            )
+        return finite
+
     def estimate(
         self,
         initial_guess: Optional[np.ndarray] = None,
         method: str = "L-BFGS-B",
+        bounds: Optional[List[Tuple[float, float]]] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         r"""
@@ -123,33 +170,46 @@ class JumpDiffusionEstimator(BaseEstimator):
         Parameters:
         -----------
         initial_guess : np.array, optional
-            Initial parameter values
+            Initial parameter values. Optional for every method: gradient
+            methods fall back to a moment-based heuristic guess, while
+            ``"differential_evolution"`` does not need one at all (its
+            initial population is sampled over ``bounds``; when a guess
+            *is* supplied it merely seeds one population member).
         method : str
-            Optimization method
+            Optimization method. Any ``scipy.optimize.minimize`` method
+            name (default ``"L-BFGS-B"``), or ``"differential_evolution"``
+            for the global, population-based optimizer from
+            ``scipy.optimize.differential_evolution``. Differential
+            evolution is markedly more robust to poor prior knowledge on
+            this mixture likelihood -- the applied finding of Ospina
+            Arango (2009), where L-BFGS-B stalled at box boundaries and
+            simulated annealing diverged, while DE (rand/1, population 70,
+            400 generations in R's ``DEoptim``) recovered the true
+            parameters even under very wide bounds. The trade-off is
+            computational cost (thousands of likelihood evaluations).
+        bounds : list of (low, high) tuples, optional
+            Optimization box, one pair per parameter in the order
+            ``[mu, sigma, jump_prob, *jump_distribution.param_names]``.
+            Defaults to the model's own bounds for gradient methods, or a
+            wide data-driven finite box (see ``_finite_bounds``) for
+            differential evolution, which requires every bound finite.
         \*\*kwargs : dict
-            Additional arguments for optimizer
+            Additional arguments for the optimizer: merged into
+            ``options`` for ``scipy.optimize.minimize``, passed directly
+            to ``scipy.optimize.differential_evolution`` (e.g. ``seed=42``
+            for reproducibility, ``maxiter``, ``popsize``, ``workers``).
 
         Returns:
         --------
         dict
             Estimation results
         """
-        if initial_guess is None:
-            initial_guess = self._get_initial_guess()
-        initial_guess = np.asarray(initial_guess, dtype=float)
-
-        bounds = self._model.get_parameter_bounds()
-
-        # Optimization
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            result = minimize(
-                fun=self.log_likelihood,  # type: ignore
-                x0=initial_guess,
-                method=method,
-                bounds=bounds,
-                options={"maxiter": 1000, "ftol": 1e-9, **kwargs},
+        if method.lower() in ("differential_evolution", "de"):
+            result = self._optimize_differential_evolution(
+                initial_guess, bounds, **kwargs
             )
+        else:
+            result = self._optimize_minimize(initial_guess, method, bounds, **kwargs)
 
         # Process results
         parameters = dict(zip(self._param_names, result.x))
@@ -173,6 +233,74 @@ class JumpDiffusionEstimator(BaseEstimator):
         self.results = results
         self.fitted = True
         return results
+
+    def _optimize_minimize(
+        self,
+        initial_guess: Optional[np.ndarray],
+        method: str,
+        bounds: Optional[List[Tuple[float, float]]],
+        **kwargs,
+    ) -> Any:
+        """Local optimization via ``scipy.optimize.minimize``."""
+        if initial_guess is None:
+            initial_guess = self._get_initial_guess()
+        initial_guess = np.asarray(initial_guess, dtype=float)
+
+        if bounds is None:
+            bounds = self._model.get_parameter_bounds()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return minimize(
+                fun=self.log_likelihood,  # type: ignore
+                x0=initial_guess,
+                method=method,
+                bounds=bounds,
+                options={"maxiter": 1000, "ftol": 1e-9, **kwargs},
+            )
+
+    def _optimize_differential_evolution(
+        self,
+        initial_guess: Optional[np.ndarray],
+        bounds: Optional[List[Tuple[float, float]]],
+        **kwargs,
+    ) -> Any:
+        """
+        Global optimization via ``scipy.optimize.differential_evolution``.
+
+        Defaults port the configuration from Ospina Arango (2009), which
+        used R's ``DEoptim``: strategy rand/1 with binomial crossover
+        (scipy's ``"rand1bin"``) and 400 generations. ``DEoptim`` used a
+        fixed population of 70 individuals for the 7-parameter SGED model;
+        scipy sizes the population as ``popsize * n_params``, so
+        ``popsize=10`` reproduces exactly that for the SGED case and
+        scales proportionally for other jump distributions. The thesis
+        also observes convergence well before the generation cap and
+        suggests a convergence-based stopping criterion -- scipy's ``tol``
+        (default 0.01) provides exactly that, so runs typically stop
+        early. Any of these can be overridden via ``**kwargs``.
+        """
+        if bounds is None:
+            bounds = self._finite_bounds()
+        lows, highs = zip(*bounds)
+        de_bounds = Bounds(np.asarray(lows, float), np.asarray(highs, float))
+
+        de_kwargs: Dict[str, Any] = {
+            "strategy": "rand1bin",
+            "maxiter": 400,
+            "popsize": 10,
+        }
+        de_kwargs.update(kwargs)
+        if initial_guess is not None:
+            de_kwargs["x0"] = np.asarray(initial_guess, dtype=float)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return differential_evolution(
+                func=self.log_likelihood,
+                bounds=de_bounds,
+                **de_kwargs,
+            )
 
     def diagnostics(self) -> None:
         """Print diagnostic information about the estimation.

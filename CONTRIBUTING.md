@@ -113,11 +113,15 @@ Kou's double-exponential, and Student-t are already built in — see
 - Fractional jump-diffusion
 
 ### Estimation Methods
-- Differential Evolution (`scipy.optimize.differential_evolution`) as an alternative to L-BFGS-B — more robust to poor initial guesses on this mixture likelihood, at higher computational cost
 - Bayesian estimation (MCMC)
 - Method of moments with characteristic functions
 - Particle filter methods
 - Machine learning approaches
+
+(Differential Evolution is already built in — pass
+`method="differential_evolution"` to `JumpDiffusionEstimator.estimate()`.
+It's more robust to poor initial guesses on this mixture likelihood than
+L-BFGS-B, at higher computational cost.)
 
 ### Computational Improvements
 - GPU acceleration
