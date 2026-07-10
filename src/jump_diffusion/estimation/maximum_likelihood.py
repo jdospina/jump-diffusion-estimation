@@ -540,6 +540,197 @@ class JumpDiffusionEstimator(BaseEstimator):
             "confidence_intervals": confidence_intervals,
         }
 
+    def _observed_information_matrix(
+        self,
+        param_vals: np.ndarray,
+        rel_step: float = 1e-4,
+    ) -> np.ndarray:
+        """
+        Numerically approximate the observed Fisher information matrix.
+
+        The observed information is the Hessian of the *negative*
+        log-likelihood evaluated at the estimate. Since
+        :meth:`log_likelihood` already returns the negative log-likelihood,
+        its Hessian is exactly the observed information. It is built here by
+        central finite differences: second partial derivatives on the
+        diagonal and mixed second partials off the diagonal.
+
+        Following Efron & Hinkley (1978), the *observed* information (the
+        Hessian at the estimate) is preferred over the *expected* Fisher
+        information for constructing Wald standard errors, being both easier
+        to compute for this mixture likelihood and, in their analysis, a
+        more relevant conditioning quantity.
+
+        Parameters:
+        -----------
+        param_vals : np.ndarray
+            Parameter vector at which to evaluate the Hessian, ordered as
+            ``self._param_names``. Normally the MLE.
+        rel_step : float
+            Relative step size for the finite differences. The per-parameter
+            absolute step is ``rel_step * max(|value|, 1e-2)``, further
+            shrunk so that every perturbed point stays strictly inside the
+            parameter bounds (``log_likelihood`` returns ``+inf`` outside
+            them, which would corrupt the Hessian).
+
+        Returns:
+        --------
+        np.ndarray
+            The ``(k, k)`` symmetric observed information matrix, where
+            ``k = len(self._param_names)``. Entries that could not be
+            evaluated (e.g. a parameter pinned to a bound) are ``nan``.
+        """
+        n = len(param_vals)
+        bounds = self._model.get_parameter_bounds()
+
+        # Per-parameter finite-difference steps, kept inside the bounds.
+        steps = np.empty(n)
+        for i in range(n):
+            scale = max(abs(param_vals[i]), 1e-2)
+            h = rel_step * scale
+            low, high = bounds[i]
+            if low is not None:
+                h = min(h, 0.25 * (param_vals[i] - low))
+            if high is not None:
+                h = min(h, 0.25 * (high - param_vals[i]))
+            steps[i] = h if h > 0 else np.nan
+
+        f0 = self.log_likelihood(param_vals)
+        hessian = np.full((n, n), np.nan)
+
+        def f(shift: np.ndarray) -> float:
+            return self.log_likelihood(param_vals + shift)
+
+        # Diagonal: second partial derivatives
+        for i in range(n):
+            hi = steps[i]
+            if not np.isfinite(hi):
+                continue
+            ei = np.zeros(n)
+            ei[i] = hi
+            f_plus, f_minus = f(ei), f(-ei)
+            if np.isfinite(f_plus) and np.isfinite(f_minus) and np.isfinite(f0):
+                hessian[i, i] = (f_plus - 2.0 * f0 + f_minus) / (hi * hi)
+
+        # Off-diagonal: mixed second partial derivatives
+        for i in range(n):
+            hi = steps[i]
+            if not np.isfinite(hi):
+                continue
+            for j in range(i + 1, n):
+                hj = steps[j]
+                if not np.isfinite(hj):
+                    continue
+                ei = np.zeros(n)
+                ei[i] = hi
+                ej = np.zeros(n)
+                ej[j] = hj
+                f_pp, f_pm = f(ei + ej), f(ei - ej)
+                f_mp, f_mm = f(-ei + ej), f(-ei - ej)
+                if all(np.isfinite(v) for v in (f_pp, f_pm, f_mp, f_mm)):
+                    val = (f_pp - f_pm - f_mp + f_mm) / (4.0 * hi * hj)
+                    hessian[i, j] = val
+                    hessian[j, i] = val
+
+        return hessian
+
+    def estimate_wald_standard_errors(
+        self,
+        confidence_level: float = 0.95,
+    ) -> Dict[str, Any]:
+        """
+        Estimate standard errors and confidence intervals from the observed
+        Fisher information (the Wald method).
+
+        This is the classical large-sample alternative to the profile
+        likelihood intervals of :meth:`estimate_standard_errors`. It inverts
+        the observed information matrix (see
+        :meth:`_observed_information_matrix`) to obtain the asymptotic
+        covariance of the maximum likelihood estimator, takes the square
+        root of its diagonal as the standard errors, and forms symmetric
+        intervals ``estimate +/- z * SE`` with ``z`` the standard normal
+        quantile.
+
+        Wald intervals are cheap (a single Hessian, no re-optimization) but
+        are symmetric by construction and are known to under-cover in finite
+        samples for parameters near a boundary -- notably the jump
+        probability as it approaches zero. Providing both Wald and profile
+        intervals is deliberate: comparing their coverage across jump
+        distributions is one of the intended research uses of this library.
+
+        Parameters:
+        -----------
+        confidence_level : float
+            Confidence level for the intervals (e.g. 0.95 for 95%).
+
+        Returns:
+        --------
+        dict
+            Dictionary with ``standard_errors`` and
+            ``confidence_intervals``, each keyed by parameter name. A
+            parameter's standard error is ``nan`` when the observed
+            information could not be evaluated or inverted to a positive
+            variance (e.g. an estimate pinned to a bound, or a singular
+            Hessian); its interval is then ``(nan, nan)``. The results are
+            also stored on ``self.results`` under ``wald_standard_errors``,
+            ``wald_confidence_intervals`` and ``observed_information``.
+
+        Raises:
+        -------
+        ValueError
+            If the model has not been fitted yet.
+        """
+        if not self.fitted or self.results is None:
+            raise ValueError("Model must be fitted first.")
+        results = self.results
+
+        opt_params = results["parameters"]
+        param_vals = np.array([opt_params[name] for name in self._param_names])
+
+        information = self._observed_information_matrix(param_vals)
+
+        alpha = 1.0 - confidence_level
+        z = float(stats.norm.ppf(1.0 - alpha / 2.0))
+
+        # Invert the observed information to get the asymptotic covariance
+        # matrix, guarding against a non-finite or singular Hessian.
+        covariance: Optional[np.ndarray]
+        if np.all(np.isfinite(information)):
+            try:
+                covariance = np.linalg.inv(information)
+            except np.linalg.LinAlgError:
+                covariance = None
+        else:
+            covariance = None
+
+        standard_errors: Dict[str, float] = {}
+        confidence_intervals: Dict[str, Tuple[float, float]] = {}
+
+        for idx, name in enumerate(self._param_names):
+            se_val = np.nan
+            if covariance is not None:
+                var = covariance[idx, idx]
+                if np.isfinite(var) and var > 0:
+                    se_val = float(np.sqrt(var))
+
+            if np.isfinite(se_val):
+                est = float(param_vals[idx])
+                ci_low, ci_high = est - z * se_val, est + z * se_val
+            else:
+                ci_low, ci_high = np.nan, np.nan
+
+            standard_errors[name] = se_val
+            confidence_intervals[name] = (ci_low, ci_high)
+
+        results["wald_standard_errors"] = standard_errors
+        results["wald_confidence_intervals"] = confidence_intervals
+        results["observed_information"] = information
+
+        return {
+            "standard_errors": standard_errors,
+            "confidence_intervals": confidence_intervals,
+        }
+
     def plot_profiles(self, figsize: Tuple[float, float] = (15, 10)) -> None:
         """
         Plot the profile log-likelihood curves for each parameter.
