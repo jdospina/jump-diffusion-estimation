@@ -421,12 +421,14 @@ class JumpDiffusionEstimator(BaseEstimator):
 
             if len(profile_valid) >= 3:
                 # Fit parabola: y = a*x^2 + b*x + c
-                fit_mask = profile_valid >= (opt_log_lik - 5.0)
-                if np.sum(fit_mask) >= 3:
-                    p_coefs = np.polyfit(grid_valid[fit_mask], profile_valid[fit_mask], 2)
-                    a = p_coefs[0]
-                    if a < 0:
-                        se_val = np.sqrt(-1.0 / (2.0 * a))
+                # Use up to 5 points with the highest log-likelihood to ensure we are near the peak
+                # and avoid arbitrary absolute log-likelihood thresholds.
+                n_fit_points = min(5, len(profile_valid))
+                top_indices = np.argsort(profile_valid)[-n_fit_points:]
+                p_coefs = np.polyfit(grid_valid[top_indices], profile_valid[top_indices], 2)
+                a = p_coefs[0]
+                if a < 0:
+                    se_val = np.sqrt(-1.0 / (2.0 * a))
 
                 # Find roots where L_p(x) == threshold using linear interpolation
                 left_mask = grid_valid <= mle_val
