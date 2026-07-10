@@ -54,7 +54,7 @@ def main():
         print(f"Average log-likelihood: {avg_ll:.2f}")
 
         # Parameter recovery quality
-        param_names = ["mu", "sigma", "jump_prob", "jump_scale", "jump_skew"]
+        param_names = [col[:-10] for col in results_df.columns if col.endswith("_rel_error")]
         best_recovered = min(
             param_names, key=lambda p: abs(results_df[f"{p}_rel_error"].mean())
         )
