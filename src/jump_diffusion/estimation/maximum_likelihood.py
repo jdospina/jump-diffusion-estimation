@@ -856,6 +856,145 @@ class JumpDiffusionEstimator(BaseEstimator):
             "n_successful": n_successful,
         }
 
+    def _pure_diffusion_log_likelihood(
+        self, increments: np.ndarray
+    ) -> Tuple[float, float, float]:
+        """
+        Maximized log-likelihood under the no-jump null (pure diffusion).
+
+        Under ``H0: jump_prob = 0`` the increments are i.i.d. Gaussian, so
+        the maximum likelihood fit is available in closed form: the mean and
+        (population, MLE) standard deviation of the increments. This returns
+        that maximized log-likelihood together with the two fitted moments,
+        which also parameterize the data-generating process for the
+        bootstrap in :meth:`test_for_jumps`.
+
+        Parameters:
+        -----------
+        increments : np.ndarray
+            One-dimensional array of increments.
+
+        Returns:
+        --------
+        tuple
+            ``(log_likelihood, mean, std)``. ``log_likelihood`` is
+            ``-inf`` when the increments are constant (``std == 0``).
+        """
+        mean = float(np.mean(increments))
+        std = float(np.std(increments))  # ddof=0 -> the Gaussian MLE
+        if std <= 0:
+            return -np.inf, mean, std
+        log_lik = float(np.sum(stats.norm.logpdf(increments, loc=mean, scale=std)))
+        return log_lik, mean, std
+
+    def test_for_jumps(
+        self,
+        n_bootstrap: int = 200,
+        seed: Optional[int] = None,
+        **estimate_kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Test for the presence of jumps via a parametric bootstrap likelihood
+        ratio test of ``H0: jump_prob = 0`` (pure diffusion) against
+        ``H1: jump_prob > 0``.
+
+        The statistic is the usual likelihood ratio
+        ``LR = 2 * (loglik_full - loglik_null)``, where ``loglik_full`` is
+        the maximized jump-diffusion log-likelihood (already available from
+        the fit) and ``loglik_null`` is the closed-form maximized Gaussian
+        log-likelihood (see :meth:`_pure_diffusion_log_likelihood`).
+
+        Its asymptotic null distribution is **non-standard**: under ``H0``
+        the jump probability sits on the boundary of the parameter space
+        (Chernoff, 1954; Self & Liang, 1987) *and* the jump-size parameters
+        become unidentified (Davies, 1977, 1987) -- so the usual chi-squared
+        calibration does not apply. We therefore obtain the p-value by
+        parametric bootstrap (a Monte Carlo test): simulate ``n_bootstrap``
+        pure-diffusion datasets from the fitted null model, recompute the LR
+        statistic on each, and compare the observed statistic against that
+        simulated null distribution. This sidesteps both pathologies by
+        construction.
+
+        Parameters:
+        -----------
+        n_bootstrap : int
+            Number of bootstrap datasets drawn under the null. Each requires
+            re-fitting the full jump-diffusion model, so cost scales
+            linearly.
+        seed : int, optional
+            Seed for the bootstrap data generation, for reproducibility.
+        \\*\\*estimate_kwargs : dict
+            Forwarded to :meth:`estimate` for each bootstrap re-fit.
+
+        Returns:
+        --------
+        dict
+            Dictionary with:
+
+            * ``lr_statistic`` -- observed likelihood ratio statistic.
+            * ``p_value`` -- bootstrap p-value
+              ``(1 + #{LR* >= LR_obs}) / (n_successful + 1)``; ``nan`` if no
+              bootstrap re-fit converged.
+            * ``log_likelihood_full`` / ``log_likelihood_null`` -- the two
+              maximized log-likelihoods on the observed data.
+            * ``n_bootstrap`` / ``n_successful`` -- requested and converged
+              replicate counts.
+            * ``bootstrap_statistics`` -- the simulated null LR values.
+
+            The result is also stored on ``self.results`` under
+            ``jump_test``.
+
+        Raises:
+        -------
+        ValueError
+            If the model has not been fitted yet.
+        """
+        if not self.fitted or self.results is None:
+            raise ValueError("Model must be fitted first.")
+        results = self.results
+
+        log_lik_full = results["log_likelihood"]
+        log_lik_null, mean0, std0 = self._pure_diffusion_log_likelihood(self.increments)
+        # The full model nests the null, so LR is non-negative in theory;
+        # clamp to guard against the optimizer stopping just short of it.
+        lr_observed = max(0.0, 2.0 * (log_lik_full - log_lik_null))
+
+        jump_dist = self._model.jump_distribution
+        rng = np.random.default_rng(seed)
+
+        bootstrap_stats: List[float] = []
+        for _ in range(n_bootstrap):
+            increments_b = rng.normal(mean0, std0, size=self.n_obs)
+            estimator = JumpDiffusionEstimator(
+                increments_b, self.dt, jump_distribution=jump_dist
+            )
+            rep_result = estimator.estimate(**estimate_kwargs)
+            if not rep_result["convergence"]:
+                continue
+            log_lik_full_b = rep_result["log_likelihood"]
+            log_lik_null_b, _, _ = self._pure_diffusion_log_likelihood(increments_b)
+            bootstrap_stats.append(max(0.0, 2.0 * (log_lik_full_b - log_lik_null_b)))
+
+        n_successful = len(bootstrap_stats)
+        stats_array = np.asarray(bootstrap_stats, dtype=float)
+        if n_successful >= 1:
+            exceed = int(np.sum(stats_array >= lr_observed))
+            p_value = (1.0 + exceed) / (n_successful + 1.0)
+        else:
+            p_value = np.nan
+
+        jump_test = {
+            "lr_statistic": lr_observed,
+            "p_value": p_value,
+            "log_likelihood_full": log_lik_full,
+            "log_likelihood_null": log_lik_null,
+            "n_bootstrap": n_bootstrap,
+            "n_successful": n_successful,
+            "bootstrap_statistics": stats_array,
+        }
+        results["jump_test"] = jump_test
+        return jump_test
+
     def plot_profiles(self, figsize: Tuple[float, float] = (15, 10)) -> None:
         """
         Plot the profile log-likelihood curves for each parameter.
