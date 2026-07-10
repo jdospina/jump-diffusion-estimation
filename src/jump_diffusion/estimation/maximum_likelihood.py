@@ -213,12 +213,14 @@ class JumpDiffusionEstimator(BaseEstimator):
         print("\nDATA vs MODEL COMPARISON")
         print("-" * 30)
         theoretical_mean = params["mu"] * self.dt
-        # Approximation: treats jump_scale as the jump size's standard
-        # deviation, which holds exactly for the Normal jump distribution
-        # and approximately for the others.
+        # Approximation: treats the distribution's characteristic scale as
+        # the jump size's standard deviation, which holds exactly for the
+        # Normal jump distribution and approximately for the others.
+        jump_scale = self._model.jump_distribution.characteristic_scale(
+            {k: params[k] for k in self._model.jump_distribution.param_names}
+        )
         theoretical_var = (
-            params["sigma"] ** 2 * self.dt
-            + params["jump_prob"] * params["jump_scale"] ** 2
+            params["sigma"] ** 2 * self.dt + params["jump_prob"] * jump_scale**2
         )
 
         print("Mean increment:")
