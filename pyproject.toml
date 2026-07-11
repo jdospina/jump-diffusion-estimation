@@ -61,6 +61,10 @@ tutorials = [
     "seaborn",
     "plotly",
 ]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+]
 
 [project.scripts]
 jumpdiff-validate = "jump_diffusion.scripts.validate:main"
