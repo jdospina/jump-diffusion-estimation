@@ -18,6 +18,7 @@ authors:
     orcid: "https://orcid.org/0000-0002-3547-5247"
 version: "0.2.0"
 date-released: "2026-07-10"
+doi: "10.5281/zenodo.21305522"
 license: MIT
 repository-code: "https://github.com/jdospina/jump-diffusion-estimation"
 url: "https://github.com/jdospina/jump-diffusion-estimation"

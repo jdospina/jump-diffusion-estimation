@@ -1,5 +1,7 @@
 # Jump-Diffusion Parameter Estimation
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21305522.svg)](https://doi.org/10.5281/zenodo.21305522)
+
 A comprehensive Python library for simulating and estimating parameters of jump-diffusion processes with asymmetric jump distributions.
 
 ## 🚀 Features
