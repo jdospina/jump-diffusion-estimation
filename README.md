@@ -1,6 +1,9 @@
 # Jump-Diffusion Parameter Estimation
 
+[![PyPI version](https://img.shields.io/pypi/v/jump-diffusion-estimation.svg)](https://pypi.org/project/jump-diffusion-estimation/)
+[![Python versions](https://img.shields.io/pypi/pyversions/jump-diffusion-estimation.svg)](https://pypi.org/project/jump-diffusion-estimation/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21305522.svg)](https://doi.org/10.5281/zenodo.21305522)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A comprehensive Python library for simulating and estimating parameters of jump-diffusion processes with asymmetric jump distributions.
 
@@ -32,15 +35,16 @@ Where:
 ## 🛠️ Installation
 
 ```bash
-# Clone the repository
+# Install from PyPI
+pip install jump-diffusion-estimation
+```
+
+Or install the latest development version from source:
+
+```bash
 git clone https://github.com/jdospina/jump-diffusion-estimation.git
 cd jump-diffusion-estimation
-
-# Install the package
 pip install -e .
-
-# Or install from PyPI (when available)
-pip install jump-diffusion-estimation
 ```
 
 ## 🎯 Quick Start
