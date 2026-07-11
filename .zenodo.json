@@ -1,0 +1,23 @@
+{
+  "title": "jump-diffusion-estimation",
+  "description": "A Python library for simulating and estimating jump-diffusion processes with pluggable asymmetric, heavy-tailed jump-size distributions (skew-normal, Merton normal, SGED, Kou double-exponential, Student-t). It provides maximum-likelihood estimation via L-BFGS-B and Differential Evolution, likelihood-based inference through profile-likelihood, Wald (observed Fisher information) and parametric-bootstrap standard errors and confidence intervals, a parametric-bootstrap test for the presence of jumps, and goodness-of-fit comparison across jump distributions.",
+  "upload_type": "software",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Ospina Arango, Juan David"
+    }
+  ],
+  "keywords": [
+    "jump-diffusion",
+    "stochastic-processes",
+    "maximum-likelihood",
+    "differential-evolution",
+    "profile-likelihood",
+    "parametric-bootstrap",
+    "quantitative-finance",
+    "parameter-estimation",
+    "python"
+  ]
+}

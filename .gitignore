@@ -96,3 +96,6 @@ logs/
 # Documentation builds
 docs/_build/
 docs/build/
+
+# Private research / manuscript working notes (kept local, never published)
+paper/
