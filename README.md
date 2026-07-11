@@ -2,6 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/jump-diffusion-estimation.svg)](https://pypi.org/project/jump-diffusion-estimation/)
 [![Python versions](https://img.shields.io/pypi/pyversions/jump-diffusion-estimation.svg)](https://pypi.org/project/jump-diffusion-estimation/)
+[![Documentation Status](https://readthedocs.org/projects/jump-diffusion-estimation/badge/?version=latest)](https://jump-diffusion-estimation.readthedocs.io/en/latest/?badge=latest)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21305522.svg)](https://doi.org/10.5281/zenodo.21305522)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
