@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "jump-diffusion-estimation"
+abstract: >-
+  A Python library for simulating and estimating jump-diffusion processes
+  with pluggable asymmetric, heavy-tailed jump-size distributions
+  (skew-normal, Merton normal, SGED, Kou double-exponential, Student-t).
+  It provides maximum-likelihood estimation via L-BFGS-B and Differential
+  Evolution, likelihood-based inference through profile-likelihood, Wald
+  (observed Fisher information) and parametric-bootstrap standard errors and
+  confidence intervals, a parametric-bootstrap test for the presence of
+  jumps, and goodness-of-fit comparison across jump distributions.
+authors:
+  - family-names: "Ospina Arango"
+    given-names: "Juan David"
+    email: "jdospina@gmail.com"
+version: "0.2.0"
+date-released: "2026-07-10"
+license: MIT
+repository-code: "https://github.com/jdospina/jump-diffusion-estimation"
+url: "https://github.com/jdospina/jump-diffusion-estimation"
+keywords:
+  - jump-diffusion
+  - stochastic-processes
+  - maximum-likelihood
+  - differential-evolution
+  - profile-likelihood
+  - parametric-bootstrap
+  - quantitative-finance
+  - parameter-estimation
+  - python

@@ -11,7 +11,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 setup(
     name="jump-diffusion-estimation",
     license="MIT",
-    version="0.1.0",
+    version="0.2.0",
     author="Juan David OSPINA ARANGO",
     author_email="jdospina@gmail.com",
     description="A dream about (someday) a comprehensive library for jump-diffusion parameter estimation",
