@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jump-diffusion-estimation"
+dynamic = ["version", "dependencies"]
+description = "Simulation and maximum-likelihood estimation of jump-diffusion processes with pluggable asymmetric, heavy-tailed jump distributions, plus likelihood-based inference and a test for the presence of jumps."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+    { name = "Juan David Ospina Arango", email = "jdospina@gmail.com" },
+]
+keywords = [
+    "jump-diffusion",
+    "stochastic-processes",
+    "maximum-likelihood",
+    "differential-evolution",
+    "profile-likelihood",
+    "parametric-bootstrap",
+    "quantitative-finance",
+    "parameter-estimation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Office/Business :: Financial",
+]
+
+[project.urls]
+Homepage = "https://github.com/jdospina/jump-diffusion-estimation"
+"Bug Tracker" = "https://github.com/jdospina/jump-diffusion-estimation/issues"
+Documentation = "https://jump-diffusion-estimation.readthedocs.io/"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "jupyter",
+    "sphinx",
+    "sphinx-rtd-theme",
+    "pandas-stubs; python_version >= '3.10'",
+    "scipy-stubs; python_version >= '3.10'",
+]
+tutorials = [
+    "jupyter",
+    "matplotlib",
+    "seaborn",
+    "plotly",
+]
+
+[project.scripts]
+jumpdiff-validate = "jump_diffusion.scripts.validate:main"
+jumpdiff-benchmark = "jump_diffusion.scripts.benchmark:main"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "jump_diffusion.__version__" }
+dependencies = { file = ["requirements.txt"] }
