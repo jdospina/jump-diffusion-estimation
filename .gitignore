@@ -97,5 +97,8 @@ logs/
 docs/_build/
 docs/build/
 
-# Private research / manuscript working notes (kept local, never published)
-paper/
+# Private research / manuscript working notes (kept local, never published),
+# except the JOSS paper, which must live in the repository
+paper/*
+!paper/paper.md
+!paper/paper.bib
