@@ -14,8 +14,7 @@ authors:
     orcid: 0000-0002-3547-5247
     affiliation: 1
 affiliations:
-  # TODO: confirmar afiliación antes del envío
-  - name: Universidad Nacional de Colombia, Medellín, Colombia
+  - name: Departamento de Ciencias de la Computación y de la Decisión, Facultad de Minas, Universidad Nacional de Colombia, Medellín 050035, Colombia
     index: 1
 date: 12 July 2026
 bibliography: paper.bib
