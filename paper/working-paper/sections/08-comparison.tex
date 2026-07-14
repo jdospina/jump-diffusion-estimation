@@ -1,0 +1,91 @@
+\section{Comparing jump distributions and validating the estimator}
+\label{sec:comparison}
+
+\subsection{Ranking candidate jump laws}
+
+With five interchangeable jump families, the applied question becomes:
+which one does \emph{this} dataset support?
+\code{JumpDistributionComparison} fits each candidate to the same
+increments and reports two complementary kinds of evidence.
+
+\paragraph{Information criteria.} AIC and BIC from \eqref{eq:aic-bic}
+penalize the maximized likelihood for parameter count --- relevant here
+because the candidates differ in dimension (Merton normal has one jump
+parameter, the SGED four). They answer a \emph{relative} question: which
+candidate trades fit against complexity best.
+
+\paragraph{Goodness of fit.} Information criteria cannot say whether even
+the best candidate actually fits. For that, the comparison computes a
+Kolmogorov--Smirnov distance between the observed increments and the
+fitted model's increment distribution --- the latter having no closed-form
+CDF, it is represented by a large simulated reference sample from the
+fitted model, so the statistic is a two-sample KS distance whose
+reference-side noise is made negligible by sample size.
+
+\begin{decision}[A bootstrap p-value, because parameters were estimated]
+\label{dec:ks-bootstrap}
+The classical KS p-value assumes the reference distribution was fixed
+\emph{a priori}. Here it was estimated from the very data being tested,
+which makes the naive p-value strongly anti-conservative --- the fitted
+model always looks too good, the same phenomenon that motivates the
+Lilliefors correction for Gaussian fits. The library restores validity
+with the same device as Section~\ref{sec:jumptest}: simulate
+$B$ datasets from the fitted model, \emph{re-fit the model on each}
+(re-fitting is what accounts for estimation error), recompute each
+replicate's KS distance to its own re-fitted model, and report the Monte
+Carlo p-value \eqref{eq:mc-pvalue}. A model is inadequate when the
+observed distance is large relative to the distances the model produces
+against itself.
+\end{decision}
+
+\begin{lstlisting}[caption={Bootstrap KS p-value in \code{validation/distribution\_comparison.py} (excerpt).}]
+for b in range(n_bootstrap):
+    boot_data = self._simulate_increments(fitted_model, n_obs, data_seed)
+    estimator = JumpDiffusionEstimator(
+        boot_data, self.dt, jump_distribution=jump_distribution)
+    rep_result = estimator.estimate(**estimate_kwargs)
+    if not rep_result["convergence"]:
+        continue
+    model_b = JumpDiffusionModel(jump_distribution=jump_distribution,
+                                 **rep_result["parameters"])
+    reference_b = self._simulate_increments(model_b, reference_size, ref_seed)
+    ks_b = float(ks_2samp(boot_data, reference_b).statistic)
+    if ks_b >= ks_observed:
+        exceed += 1
+    n_successful += 1
+
+return (1.0 + exceed) / (n_successful + 1.0)
+\end{lstlisting}
+
+\code{compare()} assembles everything into a table ranked by AIC (with
+BIC, KS statistic and bootstrap p-value alongside), and
+\code{plot\_comparison()} overlays each fitted mixture density on the
+increment histogram --- the visual complement to the numbers. Because the
+KS machinery relies only on simulation through
+\code{JumpDistribution.rvs}, it works unchanged for any user-added jump
+family, honoring the extension contract of Section~\ref{sec:contract}.
+
+\subsection{Monte Carlo validation of the estimator}
+
+Finally, \code{ValidationExperiment} closes the loop on the estimator
+itself: choose true parameters, simulate $R$ independent paths, estimate
+on each, and summarize the sampling behavior of the estimator ---
+bias, standard deviation, RMSE per parameter, along with convergence
+rates (all summary statistics condition on the runs whose optimization
+converged). Two reporting conventions are deliberate. Relative errors are
+reported as \code{NaN} whenever the true parameter is (numerically) zero
+--- $\mu = 0$, \code{jump\_skew} $= 0$ and \code{jump\_loc} $= 0$ are all
+natural experimental settings, and division by zero would otherwise
+inject $\pm\infty$ into every downstream summary; \code{NaN} says
+``undefined'', which is the honest answer. And the share of runs landing
+within 5\% of the truth is reported as an \emph{accuracy rate}
+(\code{within\_5pct\_rate}), pointedly not called ``coverage'': coverage
+belongs to the confidence intervals of Section~\ref{sec:inference}, and
+conflating the two invites exactly the kind of misreading a validation
+tool exists to prevent.
+
+This simulate--estimate--compare pattern is how every method in this
+paper was tested during development, packaged for users; it is also the
+seed of the full factorial Monte Carlo study (coverage of the three
+interval routes, size and power of the jump test, identifiability maps)
+that constitutes the research program around the library.

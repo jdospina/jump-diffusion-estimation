@@ -1,0 +1,229 @@
+\section{Approximating the convolution by FFT}
+\label{sec:fft}
+
+When the jump family has no closed-form Gaussian convolution (SGED,
+Student-$t$, and any user-added law that implements only \code{pdf}), the
+mixture density \eqref{eq:mixture} needs the convolution
+\begin{equation}
+  (\phi_d * f_J)(x)
+  \;=\;
+  \int_{-\infty}^{\infty} \phi_d(t)\, f_J(x - t) \dd t,
+  \qquad
+  \phi_d \equiv \phi(\cdot\,;\ m_d, \sigma_d^2),
+  \label{eq:conv-integral}
+\end{equation}
+evaluated at every observed increment, thousands of times per likelihood
+maximization. The library approximates it with the discrete Fourier
+transform, porting the scheme of \citet[ch.~4]{Ospina2009} (the
+\code{f.rec} routine, originally in R) to NumPy. This section derives the
+scheme and each of its tuning constants.
+
+\subsection{From integral to circular convolution}
+
+Discretize \eqref{eq:conv-integral} by the rectangle rule on a uniform
+grid of spacing $h$: writing $x_k = k h$ for grid points,
+\begin{equation}
+  (\phi_d * f_J)(x_n)
+  \;\approx\;
+  h \sum_{k} \phi_d(x_k)\, f_J(x_n - x_k),
+  \label{eq:riemann}
+\end{equation}
+which is $h$ times the \emph{discrete} (linear) convolution of the two
+sampled densities. The FFT computes circular, not linear, convolution:
+for two length-$N$ vectors $a$ and $b$,
+\begin{equation}
+  \operatorname{IDFT}\bigl( \operatorname{DFT}(a) \cdot \operatorname{DFT}(b) \bigr)_n
+  \;=\;
+  \sum_{k=0}^{N-1} a_k\, b_{(n - k) \bmod N},
+  \label{eq:circular}
+\end{equation}
+at cost $O(N \log N)$ instead of $O(N^2)$. Circularity means the result
+wraps around: mass that the linear convolution would place beyond the grid
+ends re-enters at the opposite end. The scheme therefore only works if the
+grid is wide enough that both densities are numerically negligible near
+its ends --- then the wrapped-around contamination is negligible too. This
+is the requirement that drives the grid-size decisions below.
+
+\begin{remark}[NumPy vs.\ R normalization]
+\label{rem:ifft}
+Equation \eqref{eq:circular} holds for NumPy's convention, where
+\code{np.fft.ifft} divides by $N$. R's \code{fft(..., inverse = TRUE)}
+does \emph{not} divide by $N$, so the thesis' original R code carried an
+explicit $1/N$ that must \emph{not} be ported. The code comments this
+trap explicitly --- an example of a design decision that exists purely to
+protect future maintainers.
+\end{remark}
+
+\subsection{The grid}
+\label{sec:fft-grid}
+
+The library samples both densities at $N = 2m$ points with
+\emph{half-integer offsets},
+\begin{equation}
+  x_k \;=\; \left(k + \tfrac12\right) h,
+  \qquad
+  k = -m, -m+1, \dots, m-1,
+  \qquad
+  m = 2^{j},
+  \label{eq:grid}
+\end{equation}
+i.e.\ a symmetric grid from $-(m - \tfrac12)h$ to $(m - \tfrac12)h$ that
+straddles zero without containing it.
+
+\begin{decision}[Half-integer offsets]
+\label{dec:half-integer}
+Two properties motivate the offset grid. First, symmetry: the grid covers
+$[-mh, mh]$ evenly with no duplicated or privileged center point, so
+symmetric densities are sampled symmetrically. Second, it dodges the
+center singularity: some candidate jump densities are unbounded at their
+mode (the Laplace corner at $0$, or the SGED with $\nu < 1$), and
+evaluating exactly at $0$ would put one enormous (or infinite) sample into
+the discrete convolution. With half-integer offsets every evaluation point
+is at distance $\ge h/2$ from zero. The same grid construction is reused
+by the generic sampler of Section~\ref{sec:contract}.
+\end{decision}
+
+\begin{decision}[Resolution first, coverage as a binding guard]
+\label{dec:h-heuristic}
+The step $h$ must resolve the \emph{narrower} of the two densities being
+convolved --- oversampling the wide one costs nothing, undersampling the
+narrow one destroys the approximation. Hence the base heuristic
+\[
+  h \;=\; \frac{\min(\sigma_d,\ s_J)}{200},
+\]
+where $s_J$ is the jump law's \code{characteristic\_scale}: two hundred
+points per standard deviation of the narrowest component, with $j = 15$
+giving $N = 2^{16} = 65{,}536$ grid points. Both constants are ported from
+\citet{Ospina2009} and exposed as arguments (\code{j}, \code{h}).
+
+Resolution alone, however, does not guarantee \emph{coverage}. The
+half-width bought by the base heuristic is $mh \ge 163$ standard
+deviations of the \emph{narrower} density --- which says nothing about
+the \emph{wider} one. An optimizer legitimately probes candidates where
+the jump scale dwarfs the diffusion scale (ratio $160{:}1$ leaves the
+jump density with essentially zero mass on a grid sized by $\sigma_d$),
+or where the jump location $\ell_J$ (the law's
+\code{characteristic\_location}, Section~\ref{sec:contract}) sits far
+from the origin. The step is therefore \emph{coarsened} whenever the span
+could not contain the mass of both densities:
+\begin{equation}
+  m h \;<\; \underbrace{|m_d| + |\ell_J| + 10\,(\sigma_d + s_J)}_{\text{half-span needed}}
+  \quad\Longrightarrow\quad
+  h \;=\; \frac{|m_d| + |\ell_J| + 10\,(\sigma_d + s_J)}{m}.
+  \label{eq:coarsen}
+\end{equation}
+A slightly coarser grid that preserves total mass beats a fine grid that
+silently truncates it. In the default daily-data regime (scale ratios up
+to $\approx 18$) the guard never binds, so ordinary fits are unaffected;
+it exists for the extreme candidates that global optimizers and boundary
+studies visit.
+\end{decision}
+
+\subsection{Re-centering and evaluation}
+
+One subtlety remains. The circular convolution \eqref{eq:circular} indexes
+vectors by array position $0, \dots, N-1$, while our samples live on the
+physical grid \eqref{eq:grid}. If entry $i$ of each input vector holds the
+density at $x_i = (i - m + \tfrac12) h$, then output entry $n$ of
+\eqref{eq:circular} accumulates products of samples whose physical
+locations add to
+\[
+  x_i + x_k \;=\; (i + k - 2m + 1)\, h ,
+\]
+with $i + k \equiv n \pmod N$. Matching this back to the target grid
+\eqref{eq:grid} shows the output is displaced by half the array length:
+entry $n$ of the raw FFT result corresponds to physical point
+$x_{n - m}$ (modulo $N$), not $x_n$. Swapping the two halves of the output
+array --- a circular shift by $m$, NumPy's \code{fftshift} --- restores
+alignment, after which entry $n$ approximates
+$(\phi_d * f_J)\bigl( x_n \bigr)$ on the same symmetric grid the inputs
+were sampled on.
+
+Finally, the convolved density is only known on grid points, and the
+likelihood needs it at the observed increments: the code linearly
+interpolates and clips tiny negative values produced by floating-point
+cancellation to zero.
+
+\begin{decision}[Out-of-grid points evaluate to zero --- individually]
+\label{dec:out-of-grid}
+Once the coverage guard \eqref{eq:coarsen} ensures the grid contains the
+densities' mass, the true convolved density beyond the grid ends is
+genuinely negligible --- so any observed increment falling there is
+assigned density $0$ (\code{np.interp} with \code{left=0.0, right=0.0}),
+which the likelihood's underflow floor (Section~\ref{sec:model}) then
+turns into a strong but finite penalty on that parameter vector.
+
+The qualifier \emph{individually} earns its place in the title: an
+earlier version of this routine returned an all-zeros vector as soon as
+\emph{any single} requested point fell outside the grid. The 2026 audit
+of the library showed the consequence: one extreme observation (e.g.\ a
+log-return of $0.11$ in the S\&P~500 sample) silently zeroed the whole
+convolution term for \emph{every} candidate whose jump scale was small
+enough that the grid, sized by Decision~\ref{dec:h-heuristic}, did not
+reach that observation --- producing an artificially flat, floored
+likelihood over the entire small-scale region. That cliff biased
+estimation against small jump scales, broke the smoothness L-BFGS-B
+relies on, and would have contaminated precisely the
+$p \to 0$ / scale $\to 0$ boundary regions that the inference and
+testing machinery of Sections~\ref{sec:inference}--\ref{sec:jumptest}
+cares most about. The lesson generalizes: a numerical guard must fail
+\emph{pointwise}, never collectively.
+\end{decision}
+
+\begin{lstlisting}[caption={The full FFT convolution in \code{distributions/base.py}.}]
+def fft_convolved_pdf(self, x, params, diffusion_mean, diffusion_std,
+                      j=15, h=None):
+    x = np.asarray(x, dtype=float)
+    jump_std = self.characteristic_scale(params)
+    if jump_std is None or jump_std <= 0:
+        return np.zeros_like(x)
+    jump_loc = self.characteristic_location(params)
+
+    m = 2**j
+    if h is not None:
+        step = h
+    else:
+        # Step chosen for resolution, then coarsened if the span could
+        # not contain the mass of both densities (plus tail margins).
+        step = min(diffusion_std, jump_std) / 200.0
+        half_span_needed = (
+            abs(diffusion_mean) + abs(jump_loc) + 10.0 * (diffusion_std + jump_std)
+        )
+        if m * step < half_span_needed:
+            step = half_span_needed / m
+
+    k = np.arange(-m + 0.5, m, 1.0)   # length 2*m, half-integer offsets
+    x_grid = k * step
+
+    f_diffusion = norm.pdf(x_grid, loc=diffusion_mean, scale=diffusion_std)
+    f_jump = self.pdf(x_grid, params)
+    if not (np.all(np.isfinite(f_diffusion)) and np.all(np.isfinite(f_jump))):
+        return np.zeros_like(x)
+
+    # numpy's ifft already divides by n, unlike R's fft(..., inverse=TRUE)
+    conv = np.real(np.fft.ifft(np.fft.fft(f_diffusion) * np.fft.fft(f_jump)))
+    conv *= step                                  # rectangle-rule weight
+    conv = np.concatenate([conv[m:], conv[:m]])   # re-center around x_grid
+    conv = np.maximum(conv, 0.0)
+
+    return np.interp(x, x_grid, conv, left=0.0, right=0.0)
+\end{lstlisting}
+
+Line by line against the derivation: the grid is \eqref{eq:grid}; the
+step selection implements Decision~\ref{dec:h-heuristic} with the
+coverage guard \eqref{eq:coarsen}; the product of FFTs and single inverse
+FFT is \eqref{eq:circular} (with the normalization of
+Remark~\ref{rem:ifft}); the multiplication by \code{step} is the
+rectangle-rule weight of \eqref{eq:riemann}; the \code{concatenate} is the
+circular shift by $m$; and the final \code{interp}, with its pointwise
+zeros outside the grid (Decision~\ref{dec:out-of-grid}), evaluates the
+result at the observed increments.
+
+\begin{remark}[Accuracy checks]
+The scheme is validated in the test suite by running it on families whose
+convolution \emph{is} known --- normal and skew-normal --- and comparing
+against \eqref{eq:normal-conv} and \eqref{eq:sn-conv}, as well as by
+checking the SGED special cases of Section~\ref{sec:sged}. This gives
+end-to-end assurance without ever trusting the FFT code on faith for the
+families where no closed form exists.
+\end{remark}

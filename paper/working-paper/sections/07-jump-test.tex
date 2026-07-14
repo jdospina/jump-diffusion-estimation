@@ -1,0 +1,129 @@
+\section{Testing for the presence of jumps}
+\label{sec:jumptest}
+
+Before interpreting fitted jump parameters, one should ask whether the
+data support jumps at all:
+\begin{equation}
+  H_0:\ p = 0
+  \qquad \text{vs.} \qquad
+  H_1:\ p > 0.
+  \label{eq:jump-hypotheses}
+\end{equation}
+The natural statistic is the likelihood ratio. Under $H_0$ the model
+collapses to pure diffusion, whose increments are i.i.d.\
+$\mathcal N(\mu\Delta t, \sigma^2\Delta t)$ --- so the null MLE is
+available in closed form (sample mean and MLE standard deviation of the
+increments, no optimizer needed) and
+\begin{equation}
+  \mathrm{LR}
+  \;=\;
+  2\left[ \loglik(\hat\thetavec) - \loglik_0(\hat m, \hat s) \right],
+  \qquad
+  \loglik_0(\hat m, \hat s) = \sum_{i=1}^{n}
+  \log \phi(\Delta x_i;\ \hat m,\ \hat s^2).
+  \label{eq:lr}
+\end{equation}
+
+\subsection{Why the textbook calibration fails twice}
+
+Were this a regular testing problem, $\mathrm{LR} \rightsquigarrow
+\chi^2_{d}$ with $d$ the number of restricted parameters. Here two
+pathologies invalidate that, \emph{simultaneously}:
+
+\paragraph{(i) The null is on the boundary.} $p = 0$ is not an interior
+point of $[0, 1]$. When a tested parameter sits on the boundary of the
+parameter space, the LR statistic's limit is not $\chi^2$ but a
+\emph{mixture} --- in the simplest case
+$\tfrac12 \chi^2_0 + \tfrac12 \chi^2_1$, reflecting that with probability
+one half the unconstrained estimate falls on the wrong side of the
+boundary and the statistic degenerates to zero
+\citep{Chernoff1954, SelfLiang1987}.
+
+\paragraph{(ii) Nuisance parameters vanish under the null.} When $p = 0$,
+the jump-size parameters $\theta_J$ multiply nothing: the likelihood
+\eqref{eq:mixture} is flat in $\theta_J$, so they are \emph{unidentified}
+under $H_0$. This is Davies' problem \citep{Davies1977, Davies1987}: the
+LR statistic is then the supremum of a process indexed by the unidentified
+parameters, its null distribution depends on the model and the data
+design, and no universal table exists.
+
+Each pathology alone has known corrections; their combination, for this
+mixture with five different jump families, does not admit a practical
+closed-form calibration.
+
+\subsection{The parametric bootstrap test}
+
+\begin{decision}[Simulate the null distribution instead of assuming one]
+\label{dec:bootstrap-test}
+The library sidesteps both pathologies with a Monte Carlo test
+\citep{DavisonHinkley1997}: whatever the true null distribution of
+$\mathrm{LR}$ is --- boundary mixture, Davies supremum, finite-sample
+quirks and all --- it can be sampled from, because the null model is fully
+specified once fitted. The procedure:
+\begin{enumerate}
+  \item Fit the null on the observed data: $\hat m, \hat s$ in closed
+        form; compute the observed $\mathrm{LR}$ via \eqref{eq:lr}.
+  \item For $b = 1, \dots, B$: simulate $n$ increments i.i.d.\
+        $\mathcal N(\hat m, \hat s^2)$; fit the \emph{full} jump-diffusion
+        model on them; compute $\mathrm{LR}^{(b)}$ the same way.
+  \item Report the Monte Carlo p-value
+        \begin{equation}
+          \hat p_{\mathrm{MC}}
+          \;=\;
+          \frac{1 + \#\{ b :\ \mathrm{LR}^{(b)} \ge \mathrm{LR} \}}
+               {B_{\mathrm{succ}} + 1},
+          \label{eq:mc-pvalue}
+        \end{equation}
+        where $B_{\mathrm{succ}}$ counts the replicates whose full-model
+        re-fit converged.
+\end{enumerate}
+The ``$+1$'' in numerator and denominator makes \eqref{eq:mc-pvalue} an
+exact-level p-value: it treats the observed statistic as one more draw
+from the null, which is precisely what it is when $H_0$ holds
+\citep{DavisonHinkley1997}. The price is $B$ full model fits --- the same
+cost profile as the bootstrap intervals of Section~\ref{sec:bootstrap}.
+\end{decision}
+
+Two implementation details guard the statistic itself. First, the full
+model nests the null, so in exact arithmetic $\mathrm{LR} \ge 0$; in
+practice the optimizer can stop a hair short of the null likelihood, so
+the code clamps the statistic at zero --- on both the observed data and
+every replicate, keeping the comparison in \eqref{eq:mc-pvalue}
+consistent. Second, the null MLE uses the population ($\mathrm{ddof}=0$)
+standard deviation: that is the Gaussian \emph{maximum likelihood}
+estimate, and using the unbiased ($\mathrm{ddof}=1$) version would
+slightly misstate $\loglik_0$ and bias the statistic.
+
+\begin{lstlisting}[caption={The jump test in \code{estimation/maximum\_likelihood.py} (excerpt).}]
+log_lik_full = results["log_likelihood"]
+log_lik_null, mean0, std0 = self._pure_diffusion_log_likelihood(self.increments)
+# The full model nests the null, so LR is non-negative in theory;
+# clamp to guard against the optimizer stopping just short of it.
+lr_observed = max(0.0, 2.0 * (log_lik_full - log_lik_null))
+
+rng = np.random.default_rng(seed)
+bootstrap_stats = []
+for _ in range(n_bootstrap):
+    increments_b = rng.normal(mean0, std0, size=self.n_obs)
+    estimator = JumpDiffusionEstimator(increments_b, self.dt,
+                                       jump_distribution=jump_dist)
+    rep_result = estimator.estimate(**estimate_kwargs)
+    if not rep_result["convergence"]:
+        continue
+    log_lik_full_b = rep_result["log_likelihood"]
+    log_lik_null_b, _, _ = self._pure_diffusion_log_likelihood(increments_b)
+    bootstrap_stats.append(max(0.0, 2.0 * (log_lik_full_b - log_lik_null_b)))
+
+exceed = int(np.sum(np.asarray(bootstrap_stats) >= lr_observed))
+p_value = (1.0 + exceed) / (len(bootstrap_stats) + 1.0)
+\end{lstlisting}
+
+\begin{remark}[What remains to be established]
+The bootstrap test is valid by construction \emph{under the fitted null};
+its finite-sample size across sample lengths and its power against
+alternatives with small $p$ or jump scales close to the diffusion scale
+are empirical questions --- precisely the ones the Monte Carlo study of
+Section~\ref{sec:closing} is designed to answer, with the naive
+$\chi^2$ and the $\tfrac12$--$\tfrac12$ mixture calibrations as
+comparators.
+\end{remark}

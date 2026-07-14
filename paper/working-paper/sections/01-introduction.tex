@@ -1,0 +1,115 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Financial asset returns exhibit occasional movements far too large to be
+explained by a Gaussian diffusion. \citet{Merton1976} formalized the now
+classical remedy: superimpose a compound jump process on the Brownian
+diffusion, so that ordinary days are driven by the diffusion and
+extraordinary days by the jumps. Fitting such a model to discretely
+sampled data by maximum likelihood is conceptually straightforward ---
+write the transition density of an increment, take logs, sum, maximize ---
+but almost every step hides a numerical or statistical subtlety:
+
+\begin{itemize}
+  \item the transition density involves the \emph{convolution} of the
+        Gaussian diffusion with the jump-size law, which has a closed form
+        only for a few jump distributions;
+  \item the resulting mixture likelihood is \emph{multimodal}, so standard
+        gradient-based optimizers can converge to spurious local optima or
+        stall at box constraints;
+  \item the numerical Hessian at the optimum is frequently ill-conditioned,
+        which makes the textbook (Wald) standard errors fragile;
+  \item testing whether jumps are present at all puts the null hypothesis
+        on the \emph{boundary} of the parameter space while leaving the
+        jump-size parameters \emph{unidentified}, so the classical
+        likelihood-ratio theory does not apply.
+\end{itemize}
+
+The Python library
+\code{jump-diffusion-estimation}\footnote{\url{https://github.com/jdospina/jump-diffusion-estimation}}
+packages a coherent solution to each of these problems. This working paper
+explains \emph{how}: every section states the mathematics first and then
+shows the code that implements it, including the design decisions ---
+discretization grids, penalization devices, optimizer configurations ---
+and the reasoning behind them. Several of those decisions are direct ports
+of the author's MSc thesis \citep{Ospina2009} and of the subsequent applied
+work in \citet{Ardia2011}; where that is the case we say so explicitly, so
+the reader can trace each formula to its origin.
+
+\subsection{The library at a glance}
+\label{sec:architecture}
+
+The package is organized in four cooperating layers, each mapped to a
+Python subpackage:
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{5.4cm}@{}}
+\toprule
+Layer & Subpackage & Main classes \\
+\midrule
+Model \& simulation & \code{models}, \code{simulation} &
+  \code{JumpDiffusionModel},\newline \code{JumpDiffusionSimulator} \\
+Jump distributions & \code{distributions} &
+  \code{JumpDistribution} + five concrete families \\
+Estimation \& inference & \code{estimation} &
+  \code{JumpDiffusionEstimator} \\
+Validation \& comparison & \code{validation} &
+  \code{ValidationExperiment},\newline \code{JumpDistributionComparison} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The dependency direction is strictly downward in the table:
+\code{JumpDiffusionModel} owns the transition density and path simulation,
+delegating everything jump-specific to a \code{JumpDistribution} object;
+\code{JumpDiffusionEstimator} evaluates that model's likelihood at trial
+parameter vectors and wraps the optimizers and the inference machinery;
+the validation layer repeatedly drives the estimator on simulated or real
+data. A user who wants a new jump-size family implements a single class
+with the distribution's density --- everything else (likelihood, FFT
+convolution, sampling, estimation, inference, comparison) works unchanged.
+That extension contract is the subject of Section~\ref{sec:distributions}.
+
+\subsection{Notation}
+\label{sec:notation}
+
+Throughout the paper, $X_t$ denotes the (log-price) process, $\mu$ the
+drift, $\sigma > 0$ the diffusion volatility, $W_t$ a standard Brownian
+motion, $N_t$ a Poisson counting process with intensity $\lambda$, and
+$J$ a generic jump size with density $f_J(\cdot\,;\theta_J)$ and parameter
+vector $\theta_J$. Observations are $n$ increments
+$\Delta x_i = x_{t_i} - x_{t_{i-1}}$ on a regular grid with spacing
+$\Delta t$; in the code, \code{data} is the array of increments and
+\code{dt} is $\Delta t$. The Bernoulli jump probability per interval is
+$p$ (\code{jump\_prob} in the code), which plays the role of
+$\lambda \Delta t$. The full parameter vector is
+\[
+  \thetavec \;=\; (\mu,\ \sigma,\ p,\ \theta_J),
+\]
+and the code orders it exactly this way:
+\begin{center}
+\code{("mu", "sigma", "jump\_prob", *jump\_distribution.param\_names)}.
+\end{center}
+We write $\phi(x; m, s^2)$ for the normal density with mean $m$ and
+variance $s^2$, $\Phi$ for the standard normal CDF, $*$ for convolution,
+and $\loglik(\thetavec)$ for the log-likelihood. Code identifiers are set
+in \code{typewriter} font; all listings are excerpts of the actual library
+source (docstrings and defensive branches are sometimes elided for
+readability, never altered).
+
+\subsection{How to read this paper}
+
+Sections follow the pipeline of an actual analysis.
+Section~\ref{sec:model} derives the model and its Bernoulli-approximated
+transition density --- the single formula the whole library revolves
+around. Section~\ref{sec:distributions} presents the five jump-size
+families and their closed-form Gaussian convolutions where they exist.
+Section~\ref{sec:fft} derives the FFT convolution scheme used when they
+do not. Section~\ref{sec:estimation} covers maximum likelihood and the
+two optimizers. Section~\ref{sec:inference} derives the three
+uncertainty-quantification routes, Section~\ref{sec:jumptest} the
+bootstrap test for the presence of jumps, and Section~\ref{sec:comparison}
+the goodness-of-fit comparison and Monte Carlo validation tools.
+Section~\ref{sec:closing} closes with the research agenda this library
+supports.

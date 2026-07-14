@@ -98,7 +98,17 @@ docs/_build/
 docs/build/
 
 # Private research / manuscript working notes (kept local, never published),
-# except the JOSS paper, which must live in the repository
+# except the JOSS paper (paper.md/paper.bib) and the working paper
+# (working-paper/: LaTeX sources + compiled PDF; build artifacts ignored)
 paper/*
 !paper/paper.md
 !paper/paper.bib
+!paper/working-paper/
+paper/working-paper/main.aux
+paper/working-paper/main.bbl
+paper/working-paper/main.blg
+paper/working-paper/main.log
+paper/working-paper/main.out
+paper/working-paper/main.toc
+paper/working-paper/main.fls
+paper/working-paper/main.fdb_latexmk

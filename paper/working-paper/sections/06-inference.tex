@@ -1,0 +1,263 @@
+\section{Uncertainty quantification: three routes}
+\label{sec:inference}
+
+A point estimate without standard errors is half an answer. The library
+implements three inference routes with deliberately different assumptions
+and costs, summarized in Table~\ref{tab:inference-routes}. Offering all
+three is itself a design decision: comparing their finite-sample coverage
+across jump families is one of the research questions this library was
+built to answer (Section~\ref{sec:closing}).
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{@{}p{5.6cm}p{4.5cm}l@{}}
+\toprule
+Route (method) & Assumes & Cost \\
+\midrule
+Wald\newline {\footnotesize\code{estimate\_wald\_standard\_errors}} &
+  asymptotic normality, regular MLE & one Hessian \\
+\addlinespace
+Profile\newline {\footnotesize\code{estimate\_standard\_errors}} &
+  Wilks' $\chi^2$ asymptotics & re-optimizations \\
+\addlinespace
+Bootstrap\newline {\footnotesize\code{estimate\_bootstrap\_standard\_errors}} &
+  correct model specification & $B$ full re-fits \\
+\bottomrule
+\end{tabular}
+\caption{The three inference routes. Cost grows downward; robustness to
+boundary and non-quadratic likelihoods grows the same way.}
+\label{tab:inference-routes}
+\end{table}
+
+\subsection{Wald intervals from the observed information}
+\label{sec:wald}
+
+Classical first-order asymptotics: under regularity conditions,
+$\hat\thetavec \approx \mathcal N\bigl(\thetavec_0,\ I(\hat\thetavec)^{-1}\bigr)$
+where
+\begin{equation}
+  I(\hat\thetavec) \;=\; -\nabla^2 \loglik(\hat\thetavec)
+  \label{eq:observed-info}
+\end{equation}
+is the \emph{observed} Fisher information --- the Hessian of the negative
+log-likelihood at the estimate. Standard errors are the square roots of
+the diagonal of $I^{-1}$, and intervals are
+$\hat\theta_r \pm z_{1-\alpha/2}\,\widehat{\mathrm{SE}}_r$.
+
+\begin{decision}[Observed, not expected, information]
+Following \citet{EfronHinkley1978}, the library uses the observed
+information rather than the expected Fisher information: for this mixture
+likelihood the expectation has no closed form and would itself require
+numerical integration, and Efron and Hinkley argue the observed
+information is the more relevant conditioning quantity anyway.
+\end{decision}
+
+Since the code's objective is already the negative log-likelihood, its
+Hessian is exactly \eqref{eq:observed-info}, built by central finite
+differences: on the diagonal
+\begin{equation}
+  \frac{\partial^2 f}{\partial \theta_r^2}
+  \;\approx\;
+  \frac{f(\hat\thetavec + h_r e_r) - 2 f(\hat\thetavec)
+        + f(\hat\thetavec - h_r e_r)}{h_r^2},
+  \label{eq:fd-diag}
+\end{equation}
+and off the diagonal the four-point mixed formula
+\begin{equation}
+  \frac{\partial^2 f}{\partial \theta_r \partial \theta_s}
+  \;\approx\;
+  \frac{f_{++} - f_{+-} - f_{-+} + f_{--}}{4 h_r h_s},
+  \label{eq:fd-mixed}
+\end{equation}
+where $f_{\pm\pm} = f(\hat\thetavec \pm h_r e_r \pm h_s e_s)$.
+
+\begin{decision}[Bound-aware step sizes]
+\label{dec:fd-steps}
+The step for parameter $r$ is $h_r = 10^{-4} \max(|\hat\theta_r|, 10^{-2})$
+--- relative, with an absolute floor so parameters estimated near zero
+(drift, jump location) still get a usable step. Crucially, each step is
+then shrunk to at most a quarter of the distance to the nearest bound:
+the objective returns $+\infty$ outside the bounds
+(Decision~\ref{dec:penalize}), and a single infinite evaluation would
+destroy the difference quotients \eqref{eq:fd-diag}--\eqref{eq:fd-mixed}.
+Entries that still cannot be evaluated (a parameter pinned exactly to a
+bound) are recorded as \code{NaN}, and the inversion is guarded: if the
+Hessian is non-finite or singular, every Wald SE is reported as
+\code{NaN} rather than silently wrong. This is not an edge case ---
+$\hat p$ near $0$ or a jump scale collapsing toward its lower bound are
+exactly the interesting regimes.
+\end{decision}
+
+\subsection{Profile likelihood intervals}
+\label{sec:profile}
+
+The Wald construction forces symmetric intervals and trusts a quadratic
+approximation of the log-likelihood. The profile likelihood does neither.
+For a scalar parameter of interest $\theta_r$, define
+\begin{equation}
+  \loglik_p(v)
+  \;=\;
+  \max_{\thetavec\,:\,\theta_r = v} \loglik(\thetavec),
+  \label{eq:profile}
+\end{equation}
+the log-likelihood maximized over all \emph{other} parameters with
+$\theta_r$ pinned at $v$. By Wilks' theorem \citep{Wilks1938}, under the
+true value $2[\loglik(\hat\thetavec) - \loglik_p(\theta_{r,0})]
+\rightsquigarrow \chi^2_1$, so
+\begin{equation}
+  \mathrm{CI}_{1-\alpha}
+  \;=\;
+  \Bigl\{ v \;:\; \loglik_p(v) \;\ge\;
+  \underbrace{\loglik(\hat\thetavec) - \tfrac12 \chi^2_{1,1-\alpha}}_{\text{threshold}}
+  \Bigr\}
+  \label{eq:profile-ci}
+\end{equation}
+is an asymptotic $(1-\alpha)$ confidence set that follows the likelihood's
+actual shape --- asymmetric where the likelihood is asymmetric, respecting
+parameter bounds by construction.
+
+Each profile point \eqref{eq:profile} is a constrained re-optimization
+(L-BFGS-B over the remaining parameters, warm-started at the MLE), so the
+practical question is \emph{where} to spend those evaluations. The
+library's algorithm, per parameter:
+
+\begin{enumerate}
+  \item \textbf{Adaptive outward search.} Starting from the MLE with step
+        $\max(0.01\,|\hat\theta_r|,\ 10^{-4})$, walk right, doubling the
+        step each time, evaluating $\loglik_p$ at each point, until the
+        profile drops below the threshold in \eqref{eq:profile-ci}, a
+        parameter bound is hit (evaluate just inside it), or 15 steps are
+        exhausted. Repeat leftward. Geometric doubling reaches a crossing
+        $k$ standard errors away in $O(\log k)$ evaluations --- important
+        because parameters like $p$ can have profiles an order of
+        magnitude wider than their Wald SE suggests.
+  \item \textbf{Infill.} If fewer than \code{n\_points} evaluations
+        accumulated, bisect the largest remaining gap between consecutive
+        evaluated points, repeatedly --- concentrating resolution where
+        the profile is least known.
+  \item \textbf{Interval endpoints by interpolation.} The CI endpoints are
+        where $\loglik_p$ crosses the threshold: found by linear
+        interpolation between the bracketing evaluations on each side. If
+        the profile never drops below the threshold before a bound (e.g.\
+        $p$ against $0$), the interval is truncated at the searched range
+        --- reproducing the one-sided behavior a boundary parameter should
+        have.
+  \item \textbf{Standard error from local curvature.} Near the MLE,
+        $\loglik_p(v) \approx \loglik(\hat\thetavec) -
+        (v - \hat\theta_r)^2 / (2\,\mathrm{SE}^2)$: a parabola whose
+        leading coefficient $a$ satisfies
+        $\mathrm{SE} = \sqrt{-1/(2a)}$. The code fits that parabola by
+        least squares through the (up to five) highest-likelihood profile
+        points. If the fit is not concave ($a \ge 0$, a genuinely
+        non-quadratic profile), the fallback derives the SE from the
+        interval width instead, $\mathrm{SE} \approx
+        (\mathrm{CI}_{\mathrm{high}} - \mathrm{CI}_{\mathrm{low}}) /
+        (2 z_{1-\alpha/2})$ --- and only when the endpoints genuinely
+        crossed the threshold rather than being truncated at the searched
+        range.
+\end{enumerate}
+
+\begin{lstlisting}[caption={The profiled objective: pin $\theta_r$, optimize the rest (excerpt).}]
+def optimize_profile(val):
+    def neg_log_lik_profile(free_params):
+        full_params = np.zeros(len(self._param_names))
+        full_params[idx] = val          # parameter of interest, pinned
+        free_idx = 0
+        for j in range(len(self._param_names)):
+            if j != idx:
+                full_params[j] = free_params[free_idx]
+                free_idx += 1
+        return self.log_likelihood(full_params)
+
+    res = minimize(fun=neg_log_lik_profile, x0=free_init,
+                   method="L-BFGS-B", bounds=free_bounds,
+                   options={"maxiter": 100, "ftol": 1e-6})
+    return -res.fun if res.success and np.isfinite(res.fun) else -np.inf
+\end{lstlisting}
+
+The companion method \code{plot\_profiles()} draws each profile with its
+threshold line --- the visual version of \eqref{eq:profile-ci}, and in
+practice the fastest way to \emph{see} identifiability problems: a flat
+profile is a parameter the data cannot pin down.
+
+\subsection{Parametric bootstrap}
+\label{sec:bootstrap}
+
+The third route drops the asymptotics altogether and pays with
+computation. Treat the fitted model as the truth; simulate $B$ datasets of
+the same length $n$ and spacing $\Delta t$ from it; re-estimate
+$\thetavec$ on each; and read the sampling distribution of the estimator
+directly off the $B$ replicate estimates
+$\hat\thetavec^{(1)}, \dots, \hat\thetavec^{(B)}$
+\citep{DavisonHinkley1997}:
+\begin{equation}
+  \widehat{\mathrm{SE}}_r = \operatorname{sd}\bigl(\hat\theta_r^{(b)}\bigr),
+  \qquad
+  \mathrm{CI}_{1-\alpha} =
+  \Bigl[ \hat\theta_r^{(\lceil B\alpha/2 \rceil)},\
+         \hat\theta_r^{(\lceil B(1-\alpha/2) \rceil)} \Bigr]
+  \quad \text{(percentile interval)}.
+  \label{eq:bootstrap}
+\end{equation}
+No normality, no quadratic approximation, and boundary effects are
+represented honestly: if $\hat p$ piles up near zero across replicates,
+the percentile interval shows it.
+
+Implementation decisions worth recording: replicate $b$ is simulated with
+seed $\texttt{seed} + b$, making the entire bootstrap reproducible from
+one integer while keeping replicates independent; re-fits that fail to
+converge are discarded (their count is reported as
+\code{n\_successful}), since averaging over failed optimizations would
+contaminate \eqref{eq:bootstrap} with optimizer artifacts; the SE uses the
+$\mathrm{ddof}=1$ sample standard deviation; and the raw replicate matrix
+is stored in the results dictionary so users can compute BCa or basic
+intervals, correlations between parameters, or replicate diagnostics
+without re-running the loop.
+
+\begin{lstlisting}[caption={The bootstrap loop (excerpt).}]
+model = JumpDiffusionModel(jump_distribution=jump_dist, **fitted_params)
+for b in range(n_bootstrap):
+    rep_seed = None if seed is None else seed + b
+    _, path, _ = model.simulate(T=horizon, n_steps=n_steps, x0=0.0,
+                                seed=rep_seed)
+    increments = np.diff(path)
+    estimator = JumpDiffusionEstimator(increments, self.dt,
+                                       jump_distribution=jump_dist)
+    rep_result = estimator.estimate(**estimate_kwargs)
+    if rep_result["convergence"]:
+        replicates.append([rep_result["parameters"][name]
+                           for name in self._param_names])
+\end{lstlisting}
+
+All three routes converge into one view: \code{summary()} returns a tidy
+table with one row per parameter and one column block per computed route,
+and \code{diagnostics()} prints it with convergence and data statistics
+--- making the disagreement between routes (the interesting part) visible
+at a glance.
+
+\code{diagnostics()} also compares the sample mean and variance of the
+increments against the ones the fitted model \emph{implies}. Under the
+Bernoulli mixture \eqref{eq:bernoulli-increment} these are exact:
+\begin{equation}
+  \E[\Delta X] = \mu\,\Delta t + p\,\E[J],
+  \qquad
+  \operatorname{Var}[\Delta X]
+  = \sigma^2 \Delta t + p\,\E[J^2] - \bigl(p\,\E[J]\bigr)^2,
+  \label{eq:incr-moments}
+\end{equation}
+with $\E[J]$ and $\operatorname{Var}[J]$ supplied by the jump law's
+generic numerical moments (Section~\ref{sec:contract}).
+
+\begin{remark}[The jump term in the mean is not optional]
+An earlier version of \code{diagnostics()} printed $\mu\,\Delta t$ alone
+as the theoretical mean. With symmetric jumps that omission is invisible
+($\E[J]=0$), but the 2026 audit measured its effect on a skew-normal fit:
+a reported theoretical mean of $-0.000019$ against an empirical mean of
+$0.011798$ --- suggesting a gross model--data mismatch --- when the
+model's actual implied mean, $\mu\Delta t + p\,\E[J] = 0.011778$, agreed
+with the data almost exactly. For \emph{asymmetric} jump laws, the whole
+point of this library, the $p\,\E[J]$ term routinely dominates
+$\mu\,\Delta t$; equation \eqref{eq:incr-moments} is now computed in
+full.
+\end{remark}
