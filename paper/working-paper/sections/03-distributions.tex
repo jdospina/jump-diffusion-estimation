@@ -1,0 +1,382 @@
+\section{Jump-size distributions}
+\label{sec:distributions}
+
+Everything jump-specific in the library lives behind one abstract
+interface, \code{JumpDistribution}. This section first describes that
+contract, then walks through the five concrete families, deriving the
+closed-form Gaussian convolution wherever one exists --- those closed
+forms are what let the likelihood skip the FFT machinery of
+Section~\ref{sec:fft} for the families that admit them.
+
+\subsection{The extension contract}
+\label{sec:contract}
+
+A concrete jump distribution must implement four small methods and may
+override three more:
+
+\begin{center}
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+Method & Status & Role \\
+\midrule
+\code{pdf(x, params)} & required & jump-size density $f_J(x;\theta_J)$ \\
+\code{default\_params()} & required & sensible defaults for simulation \\
+\code{param\_bounds()} & required & optimization box for $\theta_J$ \\
+\code{initial\_guess(m, s, skew)} & required & moment-based starting values \\
+\midrule
+\code{characteristic\_scale(params)} & optional & scale $s_J$ used to size numerical grids \\
+\code{characteristic\_location(params)} & optional & center $\ell_J$ used to place numerical grids \\
+\code{diffusion\_convolved\_pdf(...)} & optional & closed form for $\phi * f_J$, if known \\
+\code{rvs(params, size)} & optional & native sampler, if available \\
+\code{mean(params)}, \code{variance(params)} & generic & numerical $\E[J]$, $\operatorname{Var}[J]$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{decision}[Density-only extensibility]
+\label{dec:pdf-only}
+The base class provides generic numerical fallbacks for the two hard
+operations: \code{fft\_convolved\_pdf} approximates $\phi * f_J$ by FFT
+(Section~\ref{sec:fft}), and \code{rvs} samples by numerically inverting
+the CDF obtained from the cumulative sum of the discretized density. A new
+distribution therefore only \emph{needs} its \code{pdf}; closed-form
+overrides are pure speed-ups. This is what makes the library's ``pluggable
+jump law'' promise cheap to keep.
+\end{decision}
+
+The numerical fallbacks share one discretization of the density,
+\code{\_moment\_grid}: $2m = 2^{13}$ half-integer-offset points (coarser
+than the FFT grid --- ample for sampling and moments) with step
+$h = s_J / 200$, \emph{centered on the law's characteristic location}
+$\ell_J$ so that a shifted distribution (a Student-$t$ or SGED with a
+large \code{jump\_loc}) is not sampled from an empty grid. On top of it,
+the generic \code{rvs} inverts the cumulative sum by linear
+interpolation, and the generic \code{mean}/\code{variance} integrate the
+discretized density --- the moments that feed the model-implied increment
+diagnostics of Section~\ref{sec:inference}, verified in the test suite
+against the closed-form moments of the normal, skew-normal, Kou and
+located Student-$t$ laws:
+
+\begin{lstlisting}[caption={Shared grid, inverse-CDF sampling and numerical moments in \code{distributions/base.py} (excerpts).}]
+def _moment_grid(self, params):
+    jump_std = self.characteristic_scale(params)
+    h = jump_std / 200.0
+    m = 2**12  # a coarser grid than fft_convolved_pdf suffices here
+    k = np.arange(-m + 0.5, m, 1.0)
+    # Centered on the distribution's location so that a shifted
+    # distribution (large jump_loc) does not fall off the grid.
+    x_grid = self.characteristic_location(params) + k * h
+    density = np.maximum(self.pdf(x_grid, params), 0.0)
+    return x_grid, density, h
+
+def rvs(self, params, size, random_state=None):
+    x_grid, density, h = self._moment_grid(params)
+    cdf = np.cumsum(density) * h
+    cdf /= cdf[-1]
+    u = rand.uniform(0.0, 1.0, size=size)
+    return np.interp(u, cdf, x_grid)
+
+def mean(self, params):
+    x_grid, density, h = self._moment_grid(params)
+    total = float(np.sum(density) * h)
+    if total <= 0:
+        return float("nan")
+    return float(np.sum(x_grid * density) * h / total)
+\end{lstlisting}
+
+The two \code{characteristic\_*} hooks deserve a word: the numerical
+grids must be sized by how spread out the jump law is and placed where
+its mass actually lives. The default \code{characteristic\_scale} reads
+the parameter named \code{jump\_scale} (the convention of the normal,
+skew-normal, SGED and Student-$t$ families); distributions parameterized
+differently override it --- Kou's law, with separate up and down scales,
+returns the larger of the two. The default
+\code{characteristic\_location} reads \code{jump\_loc}, falling back to
+$0$ for the families centered at the origin; laws whose center is not a
+parameter but stays within a few scales of zero (Kou again) are covered
+by the grids' tail margins and need no override.
+
+\subsection{Normal jumps (Merton)}
+\label{sec:normal}
+
+The classical model of \citet{Merton1976}: $J \sim \mathcal N(0, s^2)$
+with a single parameter \code{jump\_scale}~$= s$. Its convolution with the
+diffusion is the textbook result that a sum of independent normals is
+normal:
+\begin{equation}
+  \phi_{m_d,\,\sigma_d^2} * f_J
+  \;=\;
+  \phi\!\left(\cdot\,;\ m_d,\ \sigma_d^2 + s^2\right),
+  \label{eq:normal-conv}
+\end{equation}
+where $m_d = \mu\Delta t$ and $\sigma_d = \sigma\sqrt{\Delta t}$ are the
+diffusion mean and standard deviation of Section~\ref{sec:model}.
+
+\begin{lstlisting}[caption={Closed-form convolution \eqref{eq:normal-conv} in \code{distributions/normal.py}.}]
+def diffusion_convolved_pdf(self, x, params, diffusion_mean, diffusion_std):
+    combined_std = np.sqrt(diffusion_std**2 + params["jump_scale"] ** 2)
+    return norm.pdf(x, loc=diffusion_mean, scale=combined_std)
+\end{lstlisting}
+
+Beyond historical importance, \code{NormalJump} plays a structural role:
+it is nested inside the skew-normal family (at zero skewness) and inside
+the SGED (at $\nu = 2$, $\xi = 1$), which makes it the natural null model
+when asking whether asymmetry or heavy tails are really needed
+(Section~\ref{sec:comparison}).
+
+\subsection{Skew-normal jumps}
+\label{sec:skewnormal}
+
+The skew-normal distribution of \citet{Azzalini1985} with location $0$,
+scale $\omega$ (\code{jump\_scale}) and shape $\alpha$ (\code{jump\_skew})
+has density
+\begin{equation}
+  f_J(x)
+  \;=\;
+  \frac{2}{\omega}\,
+  \phi\!\left(\frac{x}{\omega}\right)
+  \Phi\!\left(\alpha \frac{x}{\omega}\right).
+  \label{eq:sn-pdf}
+\end{equation}
+Positive $\alpha$ skews the jumps to the right, negative to the left, and
+$\alpha = 0$ recovers the normal.
+
+The family is closed under convolution with an independent normal
+\citep{Azzalini1986}\footnote{The library's code comments cite this
+result as ``Azzalini \& Henze (1986)''; the closure property itself
+appears in \citet{Azzalini1986}, while Henze's 1986 paper gives the
+related probabilistic representation of the skew-normal.}: if $J \sim \mathrm{SN}(0, \omega, \alpha)$ and
+$D \sim \mathcal N(m_d, \sigma_d^2)$ independently, then $D + J$ is again
+skew-normal with location $m_d$, scale
+$\tilde\omega = \sqrt{\omega^2 + \sigma_d^2}$, and a \emph{new} shape
+parameter obtained by passing through the $\delta$-parameterization:
+\begin{equation}
+  \delta = \frac{\alpha}{\sqrt{1 + \alpha^2}},
+  \qquad
+  \tilde\delta = \frac{\omega\,\delta}{\tilde\omega},
+  \qquad
+  \tilde\alpha = \frac{\tilde\delta}{\sqrt{1 - \tilde\delta^{\,2}}}.
+  \label{eq:sn-conv}
+\end{equation}
+
+\begin{decision}[Go through $\delta$, not $\alpha$]
+\label{dec:delta}
+It is tempting to guess that the new shape is simply
+$\alpha\,\omega / \tilde\omega$ --- rescale the shape the way the scale was
+rescaled. That shortcut is \emph{wrong}: it is off by about $0.2\%$ at
+$\alpha = 2$, an error easily mistaken for FFT discretization noise but
+which biases the likelihood systematically. The library's implementation
+was verified against direct numerical convolution, and the code carries a
+comment warning future maintainers away from the shortcut.
+\end{decision}
+
+\begin{lstlisting}[caption={Skew-normal convolution \eqref{eq:sn-conv} in \code{distributions/skew\_normal.py}.}]
+def diffusion_convolved_pdf(self, x, params, diffusion_mean, diffusion_std):
+    omega = params["jump_scale"]
+    alpha = params["jump_skew"]
+    combined_std = np.sqrt(diffusion_std**2 + omega**2)
+
+    # Azzalini & Henze (1986): the new shape parameter is obtained by
+    # going through the "delta" parameterization, not alpha*omega/std.
+    delta = alpha / np.sqrt(1 + alpha**2)
+    adjusted_delta = omega * delta / combined_std
+    adjusted_skew = adjusted_delta / np.sqrt(1 - adjusted_delta**2)
+
+    return skewnorm.pdf(x, a=adjusted_skew, loc=diffusion_mean,
+                        scale=combined_std)
+\end{lstlisting}
+
+\subsection{SGED jumps}
+\label{sec:sged}
+
+The skewed generalized error distribution is the library's most flexible
+symmetric-plus-skewness family and the centerpiece of
+\citet{Ospina2009}; see also \citet{Theodossiou2015} for its role in
+finance. It is built in three steps, and the code mirrors the construction
+function by function.
+
+\paragraph{Step 1: the GED base.}
+The generalized error distribution with shape $\nu > 0$, standardized to
+mean $0$ and variance $1$, has density
+\begin{equation}
+  f_{\mathrm{GED}}(z; \nu)
+  \;=\;
+  \frac{\nu \, \exp\!\left( -\tfrac12 \left| z / \lambda_\nu \right|^{\nu} \right)}
+       {\lambda_\nu\, 2^{1 + 1/\nu}\, \Gamma(1/\nu)},
+  \qquad
+  \lambda_\nu = \sqrt{\frac{2^{-2/\nu}\,\Gamma(1/\nu)}{\Gamma(3/\nu)}} .
+  \label{eq:ged}
+\end{equation}
+$\nu = 2$ gives the standard normal, $\nu = 1$ the Laplace; smaller $\nu$
+means heavier tails.
+
+\paragraph{Step 2: skewing \`a la Fern\'andez--Steel.}
+\citet{FernandezSteel1998} skew any symmetric density by scaling its two
+halves differently with a parameter $\xi > 0$:
+\begin{equation}
+  f_{\xi}(z; \nu)
+  \;=\;
+  \frac{2}{\xi + 1/\xi}\;
+  f_{\mathrm{GED}}\!\left( \xi^{-\operatorname{sign}(z)}\, z ;\ \nu \right).
+  \label{eq:fs}
+\end{equation}
+$\xi > 1$ stretches the right tail (positive skew), $\xi < 1$ the left;
+$\xi = 1$ recovers symmetry. Skewing shifts the mean and changes the
+variance, so \eqref{eq:fs} is not yet a location-scale-friendly object.
+
+\paragraph{Step 3: re-standardization.}
+With $\lambda = \lambda_\nu$, the absolute moments of the GED give
+\begin{equation}
+  m_1 = \frac{\Gamma(2/\nu)\,\lambda\, 2^{1/\nu}}{\Gamma(1/\nu)},
+  \qquad
+  m_2 = \frac{\Gamma(3/\nu)\,\lambda^2\, 2^{2/\nu}}{\Gamma(1/\nu)},
+  \label{eq:sged-moments}
+\end{equation}
+from which the mean and variance of the skewed density \eqref{eq:fs} are
+\begin{equation}
+  \mu_\xi = \left(\xi - \tfrac{1}{\xi}\right) m_1,
+  \qquad
+  \sigma_\xi^2
+  = \left(\xi^2 + \tfrac{1}{\xi^2}\right)\left(m_2 - m_1^2\right)
+    + 2 m_1^2 - m_2 .
+  \label{eq:sged-muxi}
+\end{equation}
+The standardized SGED --- mean $0$, variance $1$, the form used throughout
+the thesis and the \code{fGarch} R package --- is then
+\begin{equation}
+  f^{\ast}_{\mathrm{SGED}}(z; \nu, \xi)
+  \;=\;
+  \sigma_\xi\, f_{\xi}\!\left( \sigma_\xi z + \mu_\xi ;\ \nu \right),
+  \label{eq:sged-std}
+\end{equation}
+and the four-parameter jump law with location \code{jump\_loc} $= \ell$
+and scale \code{jump\_scale} $= s$ (which \emph{is} the standard
+deviation) is $f_J(x) = f^{\ast}_{\mathrm{SGED}}((x - \ell)/s;\, \nu, \xi)/s$.
+
+\begin{lstlisting}[caption={The three-step SGED construction in \code{distributions/sged.py}.}]
+def _ged_lambda(nu):
+    return np.sqrt(2 ** (-2 / nu) * gamma(1 / nu) / gamma(3 / nu))
+
+def _ged_pdf(z, nu):                     # eq. (GED): standardized base
+    lam = _ged_lambda(nu)
+    return (nu * np.exp(-0.5 * np.abs(z / lam) ** nu)
+            / (lam * 2 ** (1 + 1 / nu) * gamma(1 / nu)))
+
+def _fernandez_steel_pdf(z, nu, xi):     # eq. (FS): two-piece skewing
+    sign = np.sign(z)
+    return (2.0 / (xi + 1.0 / xi)) * _ged_pdf(np.power(xi, -sign) * z, nu)
+
+def _skew_moments(nu, xi):               # eqs. (m1,m2) and (mu_xi, sigma_xi)
+    lam = _ged_lambda(nu)
+    m1 = gamma(2 / nu) * lam * 2 ** (1 / nu) / gamma(1 / nu)
+    m2 = gamma(3 / nu) * lam**2 * 2 ** (2 / nu) / gamma(1 / nu)
+    mu_xi = (xi - 1 / xi) * m1
+    sigma_xi2 = (xi**2 + 1 / xi**2) * (m2 - m1**2) + 2 * m1**2 - m2
+    return mu_xi, np.sqrt(sigma_xi2)
+
+def _standardized_sged_pdf(z, nu, xi):   # eq. (SGED): mean 0, var 1
+    mu_xi, sigma_xi = _skew_moments(nu, xi)
+    return sigma_xi * _fernandez_steel_pdf(sigma_xi * z + mu_xi, nu, xi)
+\end{lstlisting}
+
+No closed form is known for $\phi * f_{\mathrm{SGED}}$, so this family
+always goes through the FFT convolution of Section~\ref{sec:fft}. Its
+special cases ($\nu{=}2, \xi{=}1 \Rightarrow$ normal; $\nu{=}1, \xi{=}1
+\Rightarrow$ Laplace) are verified against closed forms in the test suite
+--- a pattern used throughout the library: every numerical fallback is
+tested where an exact answer exists.
+
+\subsection{Kou's double-exponential jumps}
+\label{sec:kou}
+
+\citet{Kou2002} models jumps as a mixture of two one-sided exponentials:
+with probability $q$ (\code{jump\_prob\_up}) the jump is positive,
+$J \sim \mathrm{Exp}(\eta_u)$ with mean $\eta_u$
+(\code{jump\_scale\_up}); otherwise it is negative with magnitude
+$\sim \mathrm{Exp}(\eta_d)$ (\code{jump\_scale\_down}):
+\begin{equation}
+  f_J(x)
+  \;=\;
+  q\, \frac{1}{\eta_u} e^{-x/\eta_u}\, \Ind{x > 0}
+  \;+\;
+  (1 - q)\, \frac{1}{\eta_d} e^{x/\eta_d}\, \Ind{x < 0}.
+  \label{eq:kou-pdf}
+\end{equation}
+Asymmetry here comes from $q \ne \tfrac12$ or $\eta_u \ne \eta_d$, not
+from a shape parameter.
+
+The Gaussian convolution again has a closed form, through the
+\emph{exponentially modified Gaussian} (ex-Gaussian): if
+$Y \sim \mathrm{Exp}(\eta)$ and $D \sim \mathcal N(m_d, \sigma_d^2)$,
+the density of $D + Y$ is
+\begin{equation}
+  f_{D+Y}(x)
+  =
+  \frac{1}{2\eta}
+  \exp\!\left( \frac{\sigma_d^2}{2\eta^2} - \frac{x - m_d}{\eta} \right)
+  \operatorname{erfc}\!\left(
+    \frac{1}{\sqrt2}\left( \frac{\sigma_d}{\eta} - \frac{x - m_d}{\sigma_d} \right)
+  \right),
+  \label{eq:exgauss}
+\end{equation}
+and the downward branch follows by the reflection $x \mapsto -x$. The
+convolution of \eqref{eq:kou-pdf} with the diffusion is the
+$q$-weighted mixture of one direct and one reflected ex-Gaussian.
+
+\begin{decision}[Reuse \code{scipy.stats.exponnorm}, do not re-derive]
+\label{dec:exponnorm}
+Formula \eqref{eq:exgauss} is numerically treacherous: the exponential
+factor overflows exactly where the $\operatorname{erfc}$ factor
+underflows, and the stable evaluation requires the scaled complementary
+error function $\operatorname{erfcx}$. SciPy's \code{exponnorm}
+distribution already implements exactly this (parameterized by
+$K = \eta / \sigma_d$), so the library delegates to it rather than
+re-implementing the stability tricks --- and verifies the result against
+direct numerical convolution in the tests.
+\end{decision}
+
+\begin{lstlisting}[caption={Kou convolution as a mixture of ex-Gaussians in \code{distributions/kou.py}.}]
+def diffusion_convolved_pdf(self, x, params, diffusion_mean, diffusion_std):
+    p = params["jump_prob_up"]
+    up = p * exponnorm.pdf(
+        x, K=params["jump_scale_up"] / diffusion_std,
+        loc=diffusion_mean, scale=diffusion_std)
+    down = (1 - p) * exponnorm.pdf(
+        -x, K=params["jump_scale_down"] / diffusion_std,
+        loc=-diffusion_mean, scale=diffusion_std)
+    return up + down
+\end{lstlisting}
+
+Note the downward branch: reflecting the density requires negating
+\emph{both} the evaluation points and the location of the Gaussian
+component, which is why the code passes \code{-x} and
+\code{loc=-diffusion\_mean}.
+
+\subsection{Student-\texorpdfstring{$t$}{t} jumps}
+\label{sec:student}
+
+The heavy-tailed symmetric alternative: a location-scale Student-$t$ with
+degrees of freedom $\nu_t$ (\code{jump\_df}), location \code{jump\_loc}
+and scale \code{jump\_scale}.
+
+\begin{decision}[Standardize the scale to the standard deviation]
+\label{dec:t-scale}
+SciPy's raw \code{t} scale $s_{\mathrm{scipy}}$ relates to the standard
+deviation through the degrees of freedom:
+$\operatorname{sd} = s_{\mathrm{scipy}} \sqrt{\nu_t / (\nu_t - 2)}$ for
+$\nu_t > 2$. If the raw scale were exposed as the parameter, the fitted
+``scale'' would not be comparable across candidate jump laws, and
+$\nu_t$ would entangle spread with tail weight. The library therefore
+re-parameterizes so that \code{jump\_scale} \emph{is} the standard
+deviation,
+\begin{equation}
+  s_{\mathrm{scipy}} \;=\; s \sqrt{\frac{\nu_t - 2}{\nu_t}},
+  \label{eq:t-scale}
+\end{equation}
+the same standardized-$t$ convention used for GARCH-$t$ innovations by
+\citet{Bollerslev1987}. The lower bound of \code{jump\_df} is $2.05$,
+keeping the variance finite so that \eqref{eq:t-scale} is well defined.
+\end{decision}
+
+No closed form exists for $\phi * t_{\nu_t}$, so like the SGED this family
+relies on the FFT fallback --- which is the subject of the next section.

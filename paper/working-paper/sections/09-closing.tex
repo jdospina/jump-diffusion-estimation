@@ -1,0 +1,71 @@
+\section{Closing remarks and research agenda}
+\label{sec:closing}
+
+This paper has walked through the full pipeline implemented by
+\code{jump-diffusion-estimation}: an exactly-solvable SDE whose only
+approximation is the Bernoulli treatment of the jump count
+(Section~\ref{sec:model}); five jump families behind a density-only
+extension contract, with closed-form Gaussian convolutions exploited
+wherever the mathematics allows (Section~\ref{sec:distributions}) and an
+FFT scheme, ported from \citet{Ospina2009}, wherever it does not
+(Section~\ref{sec:fft}); maximum likelihood driven by either a local
+quasi-Newton method or the differential evolution configuration whose
+robustness was the thesis' applied finding (Section~\ref{sec:estimation});
+three inference routes of increasing robustness and cost
+(Section~\ref{sec:inference}); a parametric-bootstrap likelihood-ratio
+test that sidesteps the boundary and Davies pathologies by simulating the
+null distribution outright (Section~\ref{sec:jumptest}); and
+estimation-error-aware goodness-of-fit comparison across jump families
+(Section~\ref{sec:comparison}).
+
+A recurring pattern deserves to be named, because it \emph{is} the
+library's design philosophy:
+
+\begin{itemize}
+  \item \textbf{Closed forms first, generic numerics as fallback.} Every
+        numerical fallback (FFT convolution, inverse-CDF sampling) is
+        validated against the closed forms available in special cases.
+  \item \textbf{Pathologies are mapped to explicit poison values} ---
+        $+\infty$ objectives, \code{NaN} standard errors --- never
+        silently absorbed.
+  \item \textbf{When asymptotics are doubtful, simulate.} The bootstrap
+        appears three times (intervals, jump test, KS p-value), each time
+        replacing a questionable asymptotic calibration with an honest
+        Monte Carlo one.
+  \item \textbf{Reproducibility is an argument, not an accident:} every
+        stochastic routine accepts a seed and derives per-replicate seeds
+        deterministically from it.
+\end{itemize}
+
+\subsection*{Open questions}
+
+The library makes a set of methods available; it does not yet certify
+their finite-sample behavior. The companion research program, for which
+this library is the experimental engine, targets exactly that gap:
+
+\begin{enumerate}
+  \item \textbf{Coverage.} Empirical coverage of the Wald, profile and
+        bootstrap intervals across jump families, sample sizes, jump
+        intensities and jump-to-diffusion scale ratios --- when does
+        profiling recover the nominal coverage that Wald loses?
+  \item \textbf{Jump test calibration.} Size and power of the bootstrap
+        LR test of Section~\ref{sec:jumptest} against the naive
+        $\chi^2$ and the boundary-corrected mixture calibrations.
+  \item \textbf{Identifiability.} Mapping the region of
+        $(\lambda\Delta t,\ \text{jump scale}/\sigma\sqrt{\Delta t})$
+        where $p$, $\sigma$ and the jump scale can be jointly recovered,
+        via the conditioning of the observed information and the sampling
+        correlation of $(\hat p, \hat\sigma)$.
+  \item \textbf{Bernoulli error.} Quantifying the bias of
+        Decision~\ref{dec:bernoulli} against the exact Poisson mixture as
+        $\lambda\Delta t$ grows.
+  \item \textbf{Optimizer geography.} Where in parameter space multistart
+        L-BFGS-B fails and differential evolution succeeds, extending
+        \citet{Ardia2011} from a demonstration to a map.
+\end{enumerate}
+
+Each question already has its instrument in the library; what remains is
+the systematic experiment. That study is deliberately kept out of this
+document: here we fixed \emph{what the code computes and why}, so that the
+experiments --- and any reader's own use of the library --- stand on
+explicit mathematical ground.

@@ -1,0 +1,197 @@
+\section{Maximum likelihood estimation}
+\label{sec:estimation}
+
+With the transition density in hand, estimation is the maximization of
+\eqref{eq:loglik} over
+$\thetavec = (\mu, \sigma, p, \theta_J)$. The estimator class,
+\code{JumpDiffusionEstimator}, wraps this in a numerically defensive
+objective and offers two optimizers whose contrast is one of the library's
+central themes: a fast local method that needs a good start, and a global
+method that needs none.
+
+\subsection{The objective}
+
+Optimizers minimize, so the objective is the \emph{negative}
+log-likelihood, with two guard layers wrapped around \eqref{eq:loglik}:
+
+\begin{lstlisting}[caption={The objective in \code{estimation/maximum\_likelihood.py}.}]
+def log_likelihood(self, params: np.ndarray) -> float:
+    sigma, jump_prob = params[1], params[2]
+
+    if sigma <= 0:
+        return np.inf
+    if jump_prob < 0 or jump_prob > 1:
+        return np.inf
+
+    self._model.update_parameters(**dict(zip(self._param_names, params)))
+    value = self._model.log_likelihood(self.increments, self.dt)
+    # Penalize non-numeric likelihood values so that population-based
+    # optimizers simply discard the offending candidates -- same device
+    # as in Ospina Arango (2009).
+    if not np.isfinite(value):
+        return np.inf
+    return -value
+\end{lstlisting}
+
+\begin{decision}[Map every pathology to $+\infty$]
+\label{dec:penalize}
+Invalid parameters ($\sigma \le 0$, $p \notin [0,1]$) and non-finite
+likelihood evaluations (numerical accidents deep in the FFT or in extreme
+tails) all return $+\infty$. For a population-based optimizer this is
+exactly the right poison: an infinite objective makes the candidate lose
+every selection comparison and disappear from the population without
+corrupting the ranking of the finite candidates. The same device ---
+mapping \code{NaN} evaluations to a large positive constant --- was used
+in \citet{Ospina2009}; $+\infty$ is its cleanest float representation.
+\end{decision}
+
+\subsection{Starting values from moments}
+\label{sec:initial-guess}
+
+Gradient methods need a starting point. The estimator builds one from the
+sample moments of the increments: since
+$\E[\Delta X] = \mu \Delta t + p\,\E[J]$ and
+$\operatorname{Var}[\Delta X] = \sigma^2 \Delta t + p \operatorname{Var}[J]
++ p(1-p)\E[J]^2$, ignoring the (typically small) jump contributions gives
+the first-pass guesses
+\begin{equation}
+  \hat\mu_0 = \frac{\overline{\Delta x}}{\Delta t},
+  \qquad
+  \hat\sigma_0 = \frac{s_{\Delta x}}{\sqrt{\Delta t}},
+  \qquad
+  \hat p_0 = 0.1,
+  \label{eq:initial-guess}
+\end{equation}
+and each jump family contributes its own heuristic through its
+\code{initial\_guess} method --- e.g.\ the skew-normal
+starts \code{jump\_scale} at half the increment standard deviation and
+signs \code{jump\_skew} by the sample skewness. These are deliberately
+crude: their job is to land in the right order of magnitude, not to be
+accurate. When they are not enough --- and Section~\ref{sec:de} shows this
+happens in practice --- the answer is a global optimizer, not a cleverer
+guess.
+
+\subsection{Local optimization: L-BFGS-B}
+
+The default method hands the objective to
+\code{scipy.optimize.minimize} with \code{method="L-BFGS-B"}, box
+constraints from the model ($\sigma > 0$, $0 < p < 1$, plus each jump
+parameter's bounds from Section~\ref{sec:contract}), and tolerances
+\code{maxiter=1000}, \code{ftol=1e-9}. On well-behaved likelihoods (normal
+or skew-normal jumps, moderate $p$) it converges in milliseconds. Its
+failure modes on this problem are well documented in
+\citet{Ospina2009}: with heavy-tailed or strongly skewed jump laws the
+mixture likelihood develops multiple local optima and long, curved ridges,
+and a quasi-Newton iterate either stalls on a box boundary or polishes
+whichever local optimum captures it.
+
+\subsection{Global optimization: differential evolution}
+\label{sec:de}
+
+Differential evolution \citep{StornPrice1997} maintains a population of
+$\mathrm{NP}$ candidate vectors and evolves it by mutation, crossover and
+greedy selection. One generation of the \emph{rand/1/bin} strategy --- the
+one used here --- transforms each population member $x_i$ as follows:
+\begin{align}
+  \text{mutation:}\quad
+    & v_i = x_{r_1} + F\,(x_{r_2} - x_{r_3}),
+    \qquad r_1 \ne r_2 \ne r_3 \ne i \ \text{random},
+    \label{eq:de-mutation}\\[2pt]
+  \text{crossover:}\quad
+    & u_{i,d} =
+      \begin{cases}
+        v_{i,d} & \text{if } U_d \le \mathrm{CR} \ \text{or}\ d = d_{\mathrm{rand}},\\
+        x_{i,d} & \text{otherwise},
+      \end{cases}
+    \label{eq:de-crossover}\\[2pt]
+  \text{selection:}\quad
+    & x_i \leftarrow u_i \ \text{iff}\ f(u_i) \le f(x_i).
+    \label{eq:de-selection}
+\end{align}
+Mutation \eqref{eq:de-mutation} perturbs a random member by a scaled
+difference of two others, so step sizes adapt to the population's own
+spread in each direction --- large early on, shrinking as the population
+contracts onto a basin. Binomial crossover \eqref{eq:de-crossover} mixes
+mutant and parent coordinate-wise. Selection \eqref{eq:de-selection} is
+greedy but elitist: the best-ever point can never be lost. No gradients
+appear anywhere, so multimodality, ridges, and the occasional
+$+\infty$ from Decision~\ref{dec:penalize} are all handled gracefully.
+
+\begin{decision}[Port the thesis' \code{DEoptim} configuration]
+\label{dec:de-config}
+The applied finding of \citet{Ospina2009} --- refined in
+\citet{Ardia2011} --- is that DE with R's \code{DEoptim} defaults
+(strategy rand/1, $\mathrm{NP} = 70$, 400 generations) recovers the SGED
+jump-diffusion optimum even from very wide bounds, where L-BFGS-B and
+simulated annealing both fail. The library ports this configuration to
+\code{scipy.optimize.differential\_evolution}:
+\begin{itemize}
+  \item \code{strategy="rand1bin"} is exactly rand/1 with binomial
+        crossover;
+  \item SciPy sizes the population as $\mathrm{popsize} \times k$ where
+        $k$ is the number of parameters, so \code{popsize=10} reproduces
+        $\mathrm{NP} = 70$ for the 7-parameter SGED model and scales
+        proportionally for other jump families;
+  \item \code{maxiter=400} matches the generation cap, and SciPy's
+        convergence tolerance (\code{tol=0.01}, stop when the population's
+        objective spread falls below 1\% of its mean) implements the
+        early-stopping criterion the thesis recommends --- in practice
+        runs stop well before 400 generations.
+\end{itemize}
+\end{decision}
+
+\begin{decision}[Finite, data-driven search box]
+\label{dec:finite-bounds}
+DE samples its initial population uniformly over the bounds, so the
+half-open boxes used by L-BFGS-B ($\mu$ unbounded, $\sigma < \infty$)
+must be replaced by finite ones. The library builds them from the data:
+$\mu$ ranges over $\hat\mu_0 \pm \max(1,\ 10|\hat\mu_0|,\ 10\hat\sigma_0)$,
+$\sigma$ over $(10^{-6},\ 10\,\hat\sigma_0)$, and any unbounded jump
+parameter is capped at $\pm 20\, s_{\Delta x}$ --- a single jump twenty
+times the typical increment is a generous ceiling, especially since
+$s_{\Delta x}$ is itself inflated by whatever jumps the data contains.
+Wide boxes are deliberate: the thesis' point is precisely that DE does
+not need tight prior knowledge, so the defaults encode ignorance, not
+information. Bounds the user supplies, and finite bounds from the jump
+family, are kept as-is.
+\end{decision}
+
+\begin{lstlisting}[caption={DE configuration in \code{estimation/maximum\_likelihood.py} (excerpt).}]
+if bounds is None:
+    bounds = self._finite_bounds()
+lows, highs = zip(*bounds)
+de_bounds = Bounds(np.asarray(lows, float), np.asarray(highs, float))
+
+de_kwargs = {
+    "strategy": "rand1bin",   # DEoptim's rand/1 with binomial crossover
+    "maxiter": 400,           # thesis generation cap
+    "popsize": 10,            # 10 * 7 params = NP 70 for the SGED model
+}
+de_kwargs.update(kwargs)      # user overrides, e.g. seed=, workers=
+return differential_evolution(func=self.log_likelihood,
+                              bounds=de_bounds, **de_kwargs)
+\end{lstlisting}
+
+The cost asymmetry is worth stating plainly: L-BFGS-B typically needs
+tens-to-hundreds of likelihood evaluations, DE thousands --- seconds
+instead of milliseconds with closed-form convolutions, and proportionally
+more through the FFT path. The recommended workflow is therefore to fit
+with DE (optionally passing \code{seed=} for reproducibility and
+\code{workers=-1} to parallelize the population evaluation) and reserve
+L-BFGS-B for quick exploratory fits and for the repeated re-fits inside
+bootstrap loops, where the data are simulated near a known optimum.
+
+\subsection{Reported quantities}
+
+\code{estimate()} returns the fitted parameters, the maximized
+log-likelihood $\loglik(\hat\thetavec)$, and the information criteria
+\begin{equation}
+  \mathrm{AIC} = 2k - 2\loglik(\hat\thetavec),
+  \qquad
+  \mathrm{BIC} = k \log n - 2\loglik(\hat\thetavec),
+  \label{eq:aic-bic}
+\end{equation}
+with $k = \dim\thetavec$ and $n$ the number of increments --- the
+ingredients for the model comparison of Section~\ref{sec:comparison} ---
+plus the raw optimizer diagnostics and a convergence flag that downstream
+bootstrap loops use to discard failed re-fits.

@@ -1,0 +1,132 @@
+\documentclass[11pt]{article}
+
+% ---------------------------------------------------------------------------
+% Working paper: mathematical companion to the jump-diffusion-estimation
+% Python library. Pedagogical in the spirit of Ospina Arango (2009): every
+% method is derived mathematically and then grounded in the actual code
+% that implements it.
+% ---------------------------------------------------------------------------
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=2.8cm]{geometry}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[round]{natbib}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+% ----- Code listings ---------------------------------------------------------
+\definecolor{codegreen}{rgb}{0.0,0.45,0.0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codeblue}{rgb}{0.15,0.15,0.6}
+\definecolor{codebg}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{pystyle}{
+  language=Python,
+  backgroundcolor=\color{codebg},
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{codeblue}\bfseries,
+  stringstyle=\color{codegreen},
+  numberstyle=\tiny\color{codegray},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  framerule=0.3pt,
+  rulecolor=\color{codegray},
+  xleftmargin=16pt,
+  aboveskip=10pt,
+  belowskip=10pt,
+  captionpos=b
+}
+\lstset{style=pystyle}
+
+% ----- Theorem-like environments ---------------------------------------------
+\emergencystretch=1.5em
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{example}{Example}[section]
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]
+\newtheorem{decision}{Design decision}[section]
+
+% ----- Notation shortcuts -----------------------------------------------------
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Ind}[1]{\mathbf{1}\{#1\}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\loglik}{\ell}
+\newcommand{\thetavec}{\vartheta}
+
+\title{%
+  Likelihood-Based Estimation of Jump-Diffusion Processes in Python:\\
+  The Mathematics Behind the \code{jump-diffusion-estimation} Library\\[4pt]
+  {\large A pedagogical working paper}%
+}
+\author{%
+  Juan David Ospina Arango\thanks{%
+    Departamento de Ciencias de la Computaci\'on y de la Decisi\'on,
+    Facultad de Minas, Universidad Nacional de Colombia, Medell\'in, Colombia.
+    \code{jdospina@gmail.com}. ORCID: 0000-0002-3547-5247.}%
+}
+\date{Working draft --- \today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\noindent
+This working paper documents, in a deliberately pedagogical style, the
+mathematics implemented by the open-source Python library
+\code{jump-diffusion-estimation}. The library simulates and estimates
+discretely sampled jump-diffusion processes whose jump sizes follow a
+pluggable distribution (normal, skew-normal, skewed generalized error,
+Kou double-exponential, Student-$t$). We derive each component in the order
+a user encounters it: the stochastic differential equation and its
+Bernoulli (at-most-one-jump) transition density; the jump-size families and
+the closed-form Gaussian convolutions available for some of them; the
+FFT-based numerical convolution used when no closed form exists; maximum
+likelihood estimation with both a local optimizer (L-BFGS-B) and a global
+one (differential evolution); three uncertainty-quantification routes
+(profile likelihood, Wald via the observed Fisher information, and the
+parametric bootstrap); a parametric-bootstrap likelihood-ratio test for the
+presence of jumps; and goodness-of-fit comparison across jump
+distributions. Every derivation is followed by the actual code that
+implements it, together with the design decisions --- grid sizes,
+penalization devices, optimizer defaults --- and the reasons behind them.
+The paper is a companion to the library and to the author's 2009 thesis,
+from which several of the numerical schemes are ported.
+\end{abstract}
+
+\vspace{1em}
+\noindent\textbf{Keywords:} jump-diffusion; maximum likelihood; FFT
+convolution; differential evolution; profile likelihood; parametric
+bootstrap; Python.
+
+\tableofcontents
+
+\input{sections/01-introduction}
+\input{sections/02-model}
+\input{sections/03-distributions}
+\input{sections/04-fft}
+\input{sections/05-estimation}
+\input{sections/06-inference}
+\input{sections/07-jump-test}
+\input{sections/08-comparison}
+\input{sections/09-closing}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

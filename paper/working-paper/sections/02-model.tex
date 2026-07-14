@@ -1,0 +1,180 @@
+\section{The model and its transition density}
+\label{sec:model}
+
+\subsection{The stochastic differential equation}
+
+The library implements the arithmetic jump-diffusion
+\begin{equation}
+  \dd X_t \;=\; \mu \dd t \;+\; \sigma \dd W_t \;+\; J_t \dd N_t,
+  \label{eq:sde}
+\end{equation}
+where $N_t$ is a Poisson process with intensity $\lambda$, independent of
+$W_t$, and the jump sizes $J_t$ are i.i.d.\ draws from
+$f_J(\cdot\,;\theta_J)$, independent of both. Because the coefficients are
+constant, \eqref{eq:sde} integrates in closed form:
+\begin{equation}
+  X_t \;=\; X_0 \;+\; \mu t \;+\; \sigma W_t \;+\; \sum_{k=1}^{N_t} J_k .
+  \label{eq:solution}
+\end{equation}
+The arithmetic specification is intended for \emph{log-prices}: if $S_t$
+is the price and $X_t = \log S_t$, then \eqref{eq:sde} is the standard
+Merton model written on returns, and the increments
+$\Delta x_i$ are the log-returns the user hands to the estimator.
+
+\begin{remark}
+Equation \eqref{eq:solution} is exact, not an Euler approximation ---
+constant coefficients make the integral trivial. Every approximation in
+the library enters later, through the treatment of the jump count per
+observation interval, not through time discretization of the diffusion.
+\end{remark}
+
+\subsection{Exact transition density: the Poisson mixture}
+
+Over an interval of length $\Delta t$, the increment implied by
+\eqref{eq:solution} is
+\begin{equation}
+  \Delta X \;=\; \mu\,\Delta t \;+\; \sigma \sqrt{\Delta t}\, Z
+  \;+\; \sum_{k=1}^{K} J_k,
+  \qquad Z \sim \mathcal N(0,1),\quad
+  K \sim \mathrm{Poisson}(\lambda \Delta t),
+  \label{eq:increment}
+\end{equation}
+with $Z$, $K$ and the $J_k$ mutually independent. Conditioning on
+$K = k$ and convolving gives the exact transition density as a Poisson
+mixture:
+\begin{equation}
+  g(\Delta x)
+  \;=\;
+  \sum_{k=0}^{\infty}
+  e^{-\lambda \Delta t}\,\frac{(\lambda \Delta t)^k}{k!}
+  \left( \phi_{\mu \Delta t,\, \sigma^2 \Delta t} * f_J^{*k} \right)
+  (\Delta x),
+  \label{eq:poisson-mixture}
+\end{equation}
+where $f_J^{*k}$ is the $k$-fold convolution of the jump density
+($f_J^{*0} = \delta_0$). Each additional term requires one more
+convolution, and for most jump laws none of them is available in closed
+form.
+
+\subsection{The Bernoulli approximation}
+\label{sec:bernoulli}
+
+\begin{decision}[At most one jump per interval]
+\label{dec:bernoulli}
+For daily data, $\lambda \Delta t$ is small: at $\lambda \Delta t = p$,
+the probability of two or more jumps in one interval is
+\[
+  \Prob(K \ge 2) \;=\; 1 - e^{-p}(1 + p) \;=\; \tfrac{p^2}{2} + O(p^3),
+\]
+i.e.\ about $0.005$ even at the fairly extreme $p = 0.1$. The library
+therefore truncates \eqref{eq:poisson-mixture} at $k \le 1$ and replaces
+the Poisson count by a Bernoulli indicator $B \sim \mathrm{Bernoulli}(p)$
+with $p = \lambda \Delta t$:
+\begin{equation}
+  \Delta X \;\approx\; \mu\,\Delta t + \sigma \sqrt{\Delta t}\, Z + B\,J .
+  \label{eq:bernoulli-increment}
+\end{equation}
+This is the same approximation used in \citet{Ospina2009} and
+\citet{Ardia2011}. It buys a two-component mixture density (one
+convolution instead of infinitely many) at a bias cost of order
+$(\lambda\Delta t)^2$; quantifying that bias precisely across the
+$\lambda \Delta t$ range is part of the research agenda of
+Section~\ref{sec:closing}.
+\end{decision}
+
+Under \eqref{eq:bernoulli-increment}, the transition density becomes the
+two-component mixture at the heart of the library,
+\begin{equation}
+  \boxed{\;
+  g_{\thetavec}(\Delta x)
+  \;=\;
+  (1 - p)\,\phi\!\left(\Delta x;\ \mu\Delta t,\ \sigma^2 \Delta t\right)
+  \;+\;
+  p \left( \phi_{\mu\Delta t,\,\sigma^2\Delta t} * f_J \right)(\Delta x).
+  \;}
+  \label{eq:mixture}
+\end{equation}
+Interpreting \eqref{eq:mixture} reads exactly like the data-generating
+story: with probability $1-p$ the day is ``ordinary'' and the increment is
+Gaussian; with probability $p$ a jump occurred and the increment is the sum
+of the Gaussian part and one draw from the jump law --- hence the
+convolution.
+
+\subsection{The code: simulation}
+
+\code{JumpDiffusionModel.simulate} generates paths directly from
+\eqref{eq:bernoulli-increment}: a vector of standard normal innovations, a
+vector of Bernoulli jump indicators, and a vector of jump sizes drawn from
+the jump distribution, combined step by step.
+
+\begin{lstlisting}[caption={Path simulation in \code{models/jump\_diffusion.py} (excerpt).}]
+dt = T / n_steps
+brownian_innovations = np.random.normal(0, 1, n_steps)
+jump_indicators = np.random.binomial(1, self.parameters["jump_prob"], n_steps)
+jump_sizes = self.jump_distribution.rvs(self._jump_params(), size=n_steps)
+
+for i in range(n_steps):
+    drift = self.parameters["mu"] * dt
+    sigma_term = self.parameters["sigma"] * np.sqrt(dt)
+    diffusion = sigma_term * brownian_innovations[i]
+    jump = jump_indicators[i] * jump_sizes[i]
+    path[i + 1] = path[i] + drift + diffusion + jump
+\end{lstlisting}
+
+Note that a jump size is drawn for every step but only \emph{applied} when
+the indicator fires; this keeps the random-number stream aligned across
+parameter values, which is convenient for variance-reduction and
+reproducibility in Monte Carlo work.
+
+\subsection{The code: the mixture density}
+
+The model's \code{\_mixture\_density} method evaluates \eqref{eq:mixture}.
+The only branch is \emph{how} the convolution term is computed: the jump
+distribution's \code{diffusion\_convolved\_pdf} is first asked for a
+closed form (Section~\ref{sec:distributions}); if it returns \code{None},
+the generic FFT fallback of Section~\ref{sec:fft} takes over.
+
+\begin{lstlisting}[caption={The mixture density \eqref{eq:mixture} in \code{models/jump\_diffusion.py}.}]
+def _mixture_density(self, x: np.ndarray, dt: float) -> np.ndarray:
+    mu = self.parameters["mu"]
+    sigma = self.parameters["sigma"]
+    p = self.parameters["jump_prob"]
+
+    diffusion_mean = mu * dt
+    diffusion_std = sigma * np.sqrt(dt)
+    diffusion_density = norm.pdf(x, loc=diffusion_mean, scale=diffusion_std)
+
+    # Jump + diffusion component: use a closed form if the jump
+    # distribution has one, otherwise fall back to FFT convolution.
+    jump_params = self._jump_params()
+    jump_diffusion_density = self.jump_distribution.diffusion_convolved_pdf(
+        x, jump_params, diffusion_mean, diffusion_std
+    )
+    if jump_diffusion_density is None:
+        jump_diffusion_density = self.jump_distribution.fft_convolved_pdf(
+            x, jump_params, diffusion_mean, diffusion_std
+        )
+
+    return (1 - p) * diffusion_density + p * jump_diffusion_density
+\end{lstlisting}
+
+The log-likelihood of the observed increments is then simply
+\begin{equation}
+  \loglik(\thetavec)
+  \;=\;
+  \sum_{i=1}^{n} \log g_{\thetavec}(\Delta x_i),
+  \label{eq:loglik}
+\end{equation}
+computed in the model's \code{log\_likelihood} method with one numerical
+guard: densities are floored at $10^{-300}$ before taking logs, so a
+single increment falling in a region where the numerical density
+underflows to zero degrades the likelihood instead of destroying it with
+$\log 0 = -\infty$.
+
+\begin{lstlisting}[caption={Log-likelihood \eqref{eq:loglik} with underflow guard.}]
+def log_likelihood(self, data: np.ndarray, dt: float) -> float:
+    increments = data if data.ndim == 1 else np.diff(data)
+    densities = self._mixture_density(increments, dt)
+    densities = np.maximum(densities, 1e-300)  # Numerical stability
+    return np.sum(np.log(densities))
+\end{lstlisting}
