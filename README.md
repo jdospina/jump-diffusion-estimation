@@ -142,40 +142,45 @@ comparison.plot_comparison()
 
 ## 📚 Examples
 
-Ready-to-run scripts are available in the `examples/` directory:
+Ready-to-run scripts live in the `examples/` directory:
 
-- **[tutorial_completo.ipynb](notebooks/tutorial_completo.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/tutorial_completo.ipynb) (español) · [tutorial_completo_en.ipynb](notebooks/tutorial_completo_en.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/tutorial_completo_en.ipynb) (English) – the canonical, end-to-end tutorial: simulate, estimate (L-BFGS-B and Differential Evolution), quantify uncertainty via all three inference routes (profile / Wald / bootstrap), test for jumps, and compare jump distributions. Start here.**
 - [basic_usage.py](examples/basic_usage.py) – demonstrates basic library usage
 - [validation_experiment.py](examples/validation_experiment.py) – runs Monte Carlo validation experiments
-- [jump_diffusion_playground.ipynb](notebooks/jump_diffusion_playground.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/jump_diffusion_playground.ipynb) – interactive playground: pick a jump distribution (Normal, Skew-Normal, SGED, Kou, Student-t), simulate, and try the "guess the parameters" game
-- [differential_evolution_showcase.ipynb](notebooks/differential_evolution_showcase.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/differential_evolution_showcase.ipynb) – showcases the power of Differential Evolution (DE) compared to L-BFGS-B on the multimodal mixture likelihood of the SGED jump-diffusion model
-- [sp500_jump_diffusion_example.ipynb](notebooks/sp500_jump_diffusion_example.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/sp500_jump_diffusion_example.ipynb) – applies the model to real S&P 500 data: parameter estimation, simulated-vs-real comparison, and ranking all five jump distributions by AIC/BIC/KS
 
-🌐 **Language / Idioma:** every notebook has an English counterpart with the `_en` suffix — [`jump_diffusion_playground_en.ipynb`](notebooks/jump_diffusion_playground_en.ipynb), [`differential_evolution_showcase_en.ipynb`](notebooks/differential_evolution_showcase_en.ipynb), [`sp500_jump_diffusion_example_en.ipynb`](notebooks/sp500_jump_diffusion_example_en.ipynb). Cada notebook tiene su versión en español (sin sufijo).
+Interactive notebooks live in the `notebooks/` directory. Every notebook is available in English and in Spanish (suffix `_spanish`):
+
+- **[complete_tutorial.ipynb](notebooks/complete_tutorial.ipynb)** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/complete_tutorial.ipynb) – **The canonical end-to-end tutorial: simulate, estimate (L-BFGS-B and Differential Evolution), quantify uncertainty via the three inference routes (profile / Wald / bootstrap), test for jumps, and compare jump distributions. Start here.**
+  - 🇪🇸 [complete_tutorial_spanish.ipynb](notebooks/complete_tutorial_spanish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/complete_tutorial_spanish.ipynb) – Tutorial completo de principio a fin: simulación, estimación (L-BFGS-B y Evolución Diferencial), inferencia por tres rutas (perfil / Wald / bootstrap), contraste de saltos y comparación de distribuciones.
+- [jump_diffusion_playground.ipynb](notebooks/jump_diffusion_playground.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/jump_diffusion_playground.ipynb) – Interactive playground: pick a jump distribution (Normal, Skew-Normal, SGED, Kou, Student-t), wiggle the sliders, simulate, and play the "guess the parameters" game.
+  - 🇪🇸 [jump_diffusion_playground_spanish.ipynb](notebooks/jump_diffusion_playground_spanish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/jump_diffusion_playground_spanish.ipynb) – Laboratorio interactivo: elige una distribución de saltos, mueve los controles, simula y juega a adivinar los parámetros.
+- [differential_evolution_showcase.ipynb](notebooks/differential_evolution_showcase.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/differential_evolution_showcase.ipynb) – Differential Evolution vs. L-BFGS-B on the multimodal mixture likelihood of the SGED jump-diffusion model.
+  - 🇪🇸 [differential_evolution_showcase_spanish.ipynb](notebooks/differential_evolution_showcase_spanish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/differential_evolution_showcase_spanish.ipynb) – Evolución Diferencial frente a L-BFGS-B sobre la verosimilitud multimodal del modelo de difusión con saltos SGED.
+- [sp500_jump_diffusion_example.ipynb](notebooks/sp500_jump_diffusion_example.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/sp500_jump_diffusion_example.ipynb) – Real S&P 500 data: parameter estimation, simulated-vs-real comparison, and a ranking of all five jump distributions by AIC/BIC and bootstrap KS.
+  - 🇪🇸 [sp500_jump_diffusion_example_spanish.ipynb](notebooks/sp500_jump_diffusion_example_spanish.ipynb) [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jdospina/jump-diffusion-estimation/blob/main/notebooks/sp500_jump_diffusion_example_spanish.ipynb) – Datos reales del S&P 500: estimación de parámetros, comparación simulado-vs-real y ranking de las cinco distribuciones de salto por AIC/BIC y KS bootstrap.
 
 ### Notebook setup
 
-Install optional dependencies and launch Jupyter to explore the notebook:
+Install optional dependencies and launch Jupyter to explore the notebooks:
 
 ```bash
 pip install notebook ipywidgets matplotlib
 jupyter notebook
 ```
 
-## 📖 Referencias Académicas
+## 📖 Academic References
 
-Los métodos numéricos y modelos estadísticos implementados en esta librería están fundamentados en la siguiente literatura:
+The numerical methods and statistical models implemented in this library build on the following literature:
 
-1. **Calibración con Evolución Diferencial y SGED:**
-   - Ospina Arango, J. D. (2009). *Tesis de Maestría*. Universidad Nacional de Colombia. (Fundamentos de la aplicación de SGED y Evolución Diferencial a procesos de Salto-Difusión).
+1. **Calibration with Differential Evolution and the SGED:**
+   - Ospina Arango, J. D. (2009). *MSc thesis*. Universidad Nacional de Colombia. (Foundations of applying the SGED and Differential Evolution to jump-diffusion processes.)
    - Ardia, D., Ospina, J. D., & Giraldo, N. D. (2011). *Jump-diffusion calibration using differential evolution.* Wilmott, 2011(55), 76-79.
    - Storn, R., & Price, K. (1997). *Differential evolution–a simple and efficient heuristic for global optimization over continuous spaces.* Journal of global optimization, 11(4), 341-359.
 
-2. **Modelos de Salto-Difusión y Distribuciones:**
+2. **Jump-diffusion models and distributions:**
    - Merton, R. C. (1976). *Option pricing when underlying stock returns are discontinuous.* Journal of financial economics, 3(1-2), 125-144.
    - Theodossiou, P. (2015). *Skewed Generalized Error Distribution of Financial Assets and Option Pricing.* Multinational Finance Journal, 19(4), 223-266.
 
-3. **Inferencia Estadística (Perfilado de Verosimilitud):**
+3. **Statistical inference (likelihood profiling):**
    - Wilks, S. S. (1938). *The large-sample distribution of the likelihood ratio for testing composite hypotheses.* The Annals of Mathematical Statistics, 9(1), 60-62.
 
 ## 🤝 Contributing
