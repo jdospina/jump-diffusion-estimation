@@ -5,6 +5,47 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-14
+
+Fixes from a systematic audit of the library (line-by-line code review
+plus a numerical battery verifying mathematical invariants).
+
+### Fixed
+- FFT-convolution density (`fft_convolved_pdf`), used by the SGED and
+  Student-t families:
+  - A single evaluation point outside the grid no longer zeroes the
+    *whole* returned density (previously an artificial likelihood cliff
+    for small-scale candidates whenever the data contained an extreme
+    observation). Out-of-grid points now evaluate to 0 individually.
+  - The grid step is coarsened when the default span cannot contain the
+    densities' mass (dominant jump scale, or a jump location far from
+    the origin), preserving total mass instead of silently truncating
+    it. The default regime is unchanged.
+- `diagnostics()` theoretical moments now include the jump contribution
+  (`E[dX] = mu*dt + p*E[J]`; exact mixture variance). Previously the
+  mean ignored jumps entirely, badly misreporting models with
+  asymmetric jumps.
+- `ValidationExperiment` no longer produces infinite relative errors
+  when a true parameter is zero (now `NaN`), and its plots/summaries
+  are NaN-safe.
+
+### Added
+- `JumpDistribution.mean()` / `.variance()`: generic numerical jump-size
+  moments, verified against closed forms.
+- `JumpDistribution.characteristic_location()`: grid placement for
+  shifted jump distributions; the generic sampler now centers on it.
+
+### Changed
+- `ValidationExperiment.analyze_results()`: the misnamed `coverage_95`
+  statistic is now `within_5pct_rate` (it is an accuracy rate, not
+  confidence-interval coverage).
+- English is now the repository's primary language: README fully in
+  English, and notebooks renamed — English names unsuffixed
+  (`getting_started`, `jump_diffusion_playground`,
+  `differential_evolution_showcase`, `sp500_case_study`) with Spanish
+  versions carrying the `_spanish` suffix. Links to the old notebook
+  filenames no longer work.
+
 ## [0.2.1] - 2026-07-13
 
 ### Fixed
