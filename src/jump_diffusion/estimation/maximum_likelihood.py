@@ -1219,15 +1219,22 @@ class JumpDiffusionEstimator(BaseEstimator):
         # Model comparison with data
         print("\nDATA vs MODEL COMPARISON")
         print("-" * 30)
-        theoretical_mean = params["mu"] * self.dt
-        # Approximation: treats the distribution's characteristic scale as
-        # the jump size's standard deviation, which holds exactly for the
-        # Normal jump distribution and approximately for the others.
-        jump_scale = self._model.jump_distribution.characteristic_scale(
-            {k: params[k] for k in self._model.jump_distribution.param_names}
-        )
+        # Exact moments of the model's Bernoulli-mixture increment
+        # dX = mu*dt + sigma*sqrt(dt)*Z + B*J with B ~ Bernoulli(p):
+        #   E[dX]   = mu*dt + p*E[J]
+        #   Var[dX] = sigma^2*dt + p*E[J^2] - (p*E[J])^2
+        # E[J] and Var[J] come from the jump distribution itself, so the
+        # jump contribution to the mean (crucial for asymmetric jumps) is
+        # no longer ignored.
+        jump_params = {k: params[k] for k in self._model.jump_distribution.param_names}
+        p = params["jump_prob"]
+        jump_mean = self._model.jump_distribution.mean(jump_params)
+        jump_var = self._model.jump_distribution.variance(jump_params)
+        theoretical_mean = params["mu"] * self.dt + p * jump_mean
         theoretical_var = (
-            params["sigma"] ** 2 * self.dt + params["jump_prob"] * jump_scale**2
+            params["sigma"] ** 2 * self.dt
+            + p * (jump_var + jump_mean**2)
+            - (p * jump_mean) ** 2
         )
 
         print("Mean increment:")
