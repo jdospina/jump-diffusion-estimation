@@ -140,6 +140,11 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         -------
         matplotlib.figure.Figure
             The created figure, e.g. for further customization or testing.
+            The figure is *closed* (deregistered from pyplot) before being
+            returned, so that in Jupyter it renders exactly once -- via the
+            returned object -- instead of twice (once by the returned
+            object's repr and once by the inline backend's end-of-cell
+            flush of open figures).
 
         Notes
         -----
@@ -149,6 +154,15 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         simulation has been run previously, these plots display the stored
         results. Supplying ``times``, ``path`` and ``jumps`` overrides the stored
         data and visualises the provided arrays instead.
+
+        Display semantics: in a notebook, calling this as the last
+        expression of a cell shows the figure once. In any other context
+        (mid-cell, inside an ``ipywidgets.Output``, or a callback), display
+        the returned figure explicitly, e.g.
+        ``display(sim.plot_simulation())``. In plain scripts, use the
+        returned object directly (``fig.savefig(...)``) -- a bare
+        ``plt.show()`` will not show it, since the figure is no longer
+        registered with pyplot.
         """
         if times is None or path is None:
             if self.last_path is None:
@@ -260,5 +274,11 @@ class JumpDiffusionSimulator(BaseSimulator, JumpDiffusionModel):
         axes[1, 1].grid(True, alpha=0.3)
 
         plt.tight_layout()
+
+        # Deregister the figure from pyplot before returning it. Otherwise
+        # Jupyter renders it twice: once via the returned object's repr and
+        # once via the inline backend's end-of-cell flush of open figures.
+        # The returned Figure still renders/saves fine on its own.
+        plt.close(fig)
 
         return fig
