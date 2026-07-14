@@ -56,6 +56,21 @@ class JumpDistribution(ABC):
         """
         return params.get("jump_scale", 1.0)
 
+    def characteristic_location(self, params: Dict[str, float]) -> float:
+        """
+        Rough center of the jump-size distribution, used to place the
+        FFT/inverse-CDF grids in :meth:`fft_convolved_pdf` and :meth:`rvs`
+        so that a shifted distribution (e.g. ``StudentTJump``/``SGEDJump``
+        with a large ``jump_loc``) does not fall outside a grid centered at
+        the origin.
+
+        Default reads ``jump_loc`` (0 when absent). Distributions whose
+        center is not a ``jump_loc`` parameter but stays within a few
+        characteristic scales of zero (e.g. ``KouJump``) are already covered
+        by the grids' tail margins and need no override.
+        """
+        return params.get("jump_loc", 0.0)
+
     def diffusion_convolved_pdf(
         self,
         x: np.ndarray,
@@ -91,18 +106,44 @@ class JumpDistribution(ABC):
         on a symmetric grid of ``2 * 2**j`` half-integer-offset points
         around zero, convolved via FFT, and linearly interpolated to
         evaluate at the requested points.
+
+        Two guards keep the discretization honest across the whole
+        parameter space an optimizer may probe:
+
+        * When ``h`` is not given, the step is chosen for resolution
+          (1/200th of the narrowest density) but then *coarsened* if the
+          resulting span ``2**j * h`` could not contain the densities'
+          mass -- e.g. a jump scale much larger than the diffusion scale,
+          or a jump location far from the origin. A slightly coarser grid
+          that preserves total mass beats a fine grid that silently
+          truncates it.
+        * Points of ``x`` outside the grid evaluate to 0 (the density is
+          genuinely negligible there once the span covers the mass); they
+          no longer zero out the *whole* result, which previously created
+          an artificial likelihood cliff whenever a single extreme
+          observation fell outside the grid of a small-scale candidate.
         """
         x = np.asarray(x, dtype=float)
         jump_std = self.characteristic_scale(params)
         if jump_std is None or jump_std <= 0:
             return np.zeros_like(x)
-
-        if h is None:
-            h = min(diffusion_std, jump_std) / 200.0
+        jump_loc = self.characteristic_location(params)
 
         m = 2**j
+        if h is not None:
+            step = h
+        else:
+            # Step chosen for resolution, then coarsened if the span could
+            # not contain the mass of both densities (plus tail margins).
+            step = min(diffusion_std, jump_std) / 200.0
+            half_span_needed = (
+                abs(diffusion_mean) + abs(jump_loc) + 10.0 * (diffusion_std + jump_std)
+            )
+            if m * step < half_span_needed:
+                step = half_span_needed / m
+
         k = np.arange(-m + 0.5, m, 1.0)  # length 2*m, half-integer offsets
-        x_grid = k * h
+        x_grid = k * step
 
         f_diffusion = norm.pdf(x_grid, loc=diffusion_mean, scale=diffusion_std)
         f_jump = self.pdf(x_grid, params)
@@ -111,14 +152,11 @@ class JumpDistribution(ABC):
 
         # numpy's ifft already divides by n, unlike R's fft(..., inverse=TRUE)
         conv = np.real(np.fft.ifft(np.fft.fft(f_diffusion) * np.fft.fft(f_jump)))
-        conv *= h
+        conv *= step
         conv = np.concatenate([conv[m:], conv[:m]])  # re-center around x_grid
         conv = np.maximum(conv, 0.0)
 
-        if x.min() < x_grid[0] or x.max() > x_grid[-1]:
-            return np.zeros_like(x)
-
-        return np.interp(x, x_grid, conv)
+        return np.interp(x, x_grid, conv, left=0.0, right=0.0)
 
     def rvs(
         self,
@@ -143,7 +181,9 @@ class JumpDistribution(ABC):
         h = jump_std / 200.0
         m = 2**12  # a coarser grid than fft_convolved_pdf suffices here
         k = np.arange(-m + 0.5, m, 1.0)
-        x_grid = k * h
+        # Centered on the distribution's location so that a shifted
+        # distribution (large jump_loc) is not sampled from an empty grid.
+        x_grid = self.characteristic_location(params) + k * h
         density = np.maximum(self.pdf(x_grid, params), 0.0)
         cdf = np.cumsum(density) * h
         cdf /= cdf[-1]
