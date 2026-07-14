@@ -47,3 +47,21 @@ class TestPlotSimulation:
 
         fig = sim.plot_simulation(show_theoretical=True)
         assert fig is not None
+
+    def test_returned_figure_is_closed(self):
+        """
+        The figure must be deregistered from pyplot before being returned;
+        otherwise Jupyter renders it twice (returned object's repr + the
+        inline backend's end-of-cell flush of open figures).
+        """
+        import matplotlib.pyplot as plt
+
+        sim = JumpDiffusionSimulator(
+            mu=0.1, sigma=0.2, jump_prob=0.5, jump_scale=0.15, jump_skew=0.0
+        )
+        sim.simulate_path(T=1.0, n_steps=100, x0=0.0, seed=1)
+
+        fig = sim.plot_simulation()
+        assert fig.number not in plt.get_fignums()
+        # The returned object must still be usable on its own.
+        assert len(fig.axes) == 4
