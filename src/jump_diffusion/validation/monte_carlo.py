@@ -115,13 +115,17 @@ class ValidationExperiment:
 
                     # Add estimated parameters
                     for param, value in est_results["parameters"].items():
+                        true_val = self.true_params[param]
                         row[f"{param}_est"] = value
-                        row[f"{param}_true"] = self.true_params[param]
-                        row[f"{param}_error"] = value - self.true_params[param]
+                        row[f"{param}_true"] = true_val
+                        row[f"{param}_error"] = value - true_val
+                        # Relative error is undefined when the true value
+                        # is (numerically) zero -- e.g. jump_skew=0 or
+                        # jump_loc=0 -- so report NaN instead of +/-inf.
                         row[f"{param}_rel_error"] = (
-                            (value - self.true_params[param])
-                            / self.true_params[param]
-                            * 100
+                            (value - true_val) / true_val * 100
+                            if abs(true_val) > 1e-12
+                            else np.nan
                         )
 
                     results.append(row)
@@ -161,10 +165,19 @@ class ValidationExperiment:
         """
         Analyze validation results and compute statistics.
 
+        Note that all statistics condition on the runs that converged
+        (non-converged runs are dropped by :meth:`run_experiment`), so with
+        a low convergence rate they carry selection bias. Relative-error
+        statistics are ``nan`` for parameters whose true value is zero.
+
         Returns:
         --------
         dict
-            Analysis results including bias, RMSE, etc.
+            Per-parameter statistics: bias, RMSE, MAE, relative errors and
+            ``within_5pct_rate`` -- the share of converged runs whose
+            estimate lies within 5% (relative) of the true value. (This
+            was previously misnamed ``coverage_95``; it is an accuracy
+            rate, not confidence-interval coverage.)
         """
         if len(self.results) == 0:
             print("No results to analyze. Run experiment first.")
@@ -181,7 +194,8 @@ class ValidationExperiment:
             true_val = self.true_params[param]
             estimated_vals = self.results[f"{param}_est"]
             errors = self.results[f"{param}_error"]
-            rel_errors = self.results[f"{param}_rel_error"]
+            rel_errors = self.results[f"{param}_rel_error"].to_numpy()
+            finite_rel = rel_errors[np.isfinite(rel_errors)]
 
             stats = {
                 "true_value": true_val,
@@ -189,11 +203,15 @@ class ValidationExperiment:
                 "bias": np.mean(errors),
                 "rmse": np.sqrt(np.mean(errors**2)),
                 "mae": np.mean(np.abs(errors)),
-                "mean_rel_error": np.mean(rel_errors),
+                "mean_rel_error": (
+                    float(np.mean(finite_rel)) if len(finite_rel) else float("nan")
+                ),
                 "std_estimate": np.std(estimated_vals),
-                "coverage_95": np.mean(
-                    np.abs(rel_errors) <= 5
-                ),  # Within 5% of true value
+                "within_5pct_rate": (
+                    float(np.mean(np.abs(finite_rel) <= 5))
+                    if len(finite_rel)
+                    else float("nan")
+                ),
             }
 
             analysis[param] = stats
@@ -204,7 +222,7 @@ class ValidationExperiment:
             print(f"  RMSE:            {stats['rmse']:.6f}")
             print(f"  Mean rel. error: {stats['mean_rel_error']:.2f}%")
             print(f"  Std deviation:   {stats['std_estimate']:.6f}")
-            print(f"  95% accuracy:    {stats['coverage_95']:.1%}")
+            print(f"  Within 5% of truth: {stats['within_5pct_rate']:.1%}")
 
         return analysis
 
@@ -279,21 +297,23 @@ class ValidationExperiment:
                 label="Perfect Estimation",
             )
 
-            # Confidence bands (±10% and ±20%)
-            ax.axhspan(
-                true_val * 0.9,
-                true_val * 1.1,
-                alpha=0.2,
-                color="green",
-                label="±10% band",
-            )
-            ax.axhspan(
-                true_val * 0.8,
-                true_val * 1.2,
-                alpha=0.1,
-                color="yellow",
-                label="±20% band",
-            )
+            # Relative accuracy bands (±10% and ±20%); meaningless (zero
+            # width) when the true value is zero, so skip them there.
+            if abs(true_val) > 1e-12:
+                ax.axhspan(
+                    true_val * 0.9,
+                    true_val * 1.1,
+                    alpha=0.2,
+                    color="green",
+                    label="±10% band",
+                )
+                ax.axhspan(
+                    true_val * 0.8,
+                    true_val * 1.2,
+                    alpha=0.1,
+                    color="yellow",
+                    label="±20% band",
+                )
 
             ax.set_xlabel("True Value")
             ax.set_ylabel("Estimated Value")
@@ -303,17 +323,23 @@ class ValidationExperiment:
             if i == 0:  # Add legend to first plot
                 ax.legend()
 
-        # Summary statistics plot
+        # Summary statistics plot. Relative measures are undefined (NaN)
+        # for parameters whose true value is zero; matplotlib simply skips
+        # those bars.
         ax = axes[len(param_names)]
         param_biases = []
+        param_rmses = []
         for param in param_names:
-            param_biases.append(np.mean(self.results[f"{param}_rel_error"]))
-        param_rmses = [
-            np.sqrt(np.mean(self.results[f"{param}_error"] ** 2))
-            / self.true_params[param]
-            * 100
-            for param in param_names
-        ]
+            rel = self.results[f"{param}_rel_error"].to_numpy()
+            finite_rel = rel[np.isfinite(rel)]
+            param_biases.append(
+                float(np.mean(finite_rel)) if len(finite_rel) else float("nan")
+            )
+            true_val = self.true_params[param]
+            rmse = np.sqrt(np.mean(self.results[f"{param}_error"] ** 2))
+            param_rmses.append(
+                rmse / abs(true_val) * 100 if abs(true_val) > 1e-12 else float("nan")
+            )
 
         x = np.arange(len(param_names))
         width = 0.35
