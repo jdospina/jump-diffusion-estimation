@@ -158,6 +158,56 @@ class JumpDistribution(ABC):
 
         return np.interp(x, x_grid, conv, left=0.0, right=0.0)
 
+    def _moment_grid(
+        self, params: Dict[str, float]
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """
+        Shared discretization of ``pdf`` used by :meth:`rvs`, :meth:`mean`
+        and :meth:`variance`: ``2**13`` points spanning ~20 characteristic
+        scales around the characteristic location.
+
+        Returns ``(x_grid, density, step)``.
+        """
+        jump_std = self.characteristic_scale(params)
+        h = jump_std / 200.0
+        m = 2**12  # a coarser grid than fft_convolved_pdf suffices here
+        k = np.arange(-m + 0.5, m, 1.0)
+        # Centered on the distribution's location so that a shifted
+        # distribution (large jump_loc) does not fall off the grid.
+        x_grid = self.characteristic_location(params) + k * h
+        density = np.maximum(self.pdf(x_grid, params), 0.0)
+        return x_grid, density, h
+
+    def mean(self, params: Dict[str, float]) -> float:
+        """
+        Mean jump size ``E[J]``, evaluated numerically on the sampling grid
+        (see :meth:`_moment_grid`). Accurate to the grid's truncation
+        (~20 characteristic scales), which is ample for reporting purposes;
+        heavy-tailed distributions lose a small tail contribution.
+
+        Returns ``nan`` if the density has no mass on the grid.
+        """
+        x_grid, density, h = self._moment_grid(params)
+        total = float(np.sum(density) * h)
+        if total <= 0:
+            return float("nan")
+        return float(np.sum(x_grid * density) * h / total)
+
+    def variance(self, params: Dict[str, float]) -> float:
+        """
+        Jump-size variance ``Var[J]``, evaluated numerically on the sampling
+        grid (see :meth:`_moment_grid`, same truncation caveat as
+        :meth:`mean`).
+
+        Returns ``nan`` if the density has no mass on the grid.
+        """
+        x_grid, density, h = self._moment_grid(params)
+        total = float(np.sum(density) * h)
+        if total <= 0:
+            return float("nan")
+        mean = np.sum(x_grid * density) * h / total
+        return float(np.sum((x_grid - mean) ** 2 * density) * h / total)
+
     def rvs(
         self,
         params: Dict[str, float],
@@ -177,14 +227,7 @@ class JumpDistribution(ABC):
         -- so that simulations stay reproducible. Pass an explicit
         ``np.random.Generator`` for an isolated, independent stream.
         """
-        jump_std = self.characteristic_scale(params)
-        h = jump_std / 200.0
-        m = 2**12  # a coarser grid than fft_convolved_pdf suffices here
-        k = np.arange(-m + 0.5, m, 1.0)
-        # Centered on the distribution's location so that a shifted
-        # distribution (large jump_loc) is not sampled from an empty grid.
-        x_grid = self.characteristic_location(params) + k * h
-        density = np.maximum(self.pdf(x_grid, params), 0.0)
+        x_grid, density, h = self._moment_grid(params)
         cdf = np.cumsum(density) * h
         cdf /= cdf[-1]
         rand = random_state if random_state is not None else np.random
