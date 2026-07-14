@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-13
+
+### Fixed
+- `plot_simulation()` no longer renders twice in Jupyter notebooks: the
+  figure is now deregistered from pyplot before being returned, so it
+  displays exactly once via the returned object. In non-cell contexts
+  (e.g. `ipywidgets.Output`, callbacks), display the returned figure
+  explicitly with `display(fig)`.
+
+### Changed
+- Packaging modernized to `pyproject.toml` (PEP 621) with automated PyPI
+  publishing via trusted publishing; the package is now on PyPI and
+  documentation is hosted on Read the Docs.
+- All notebooks (Spanish and English) install the released package from
+  PyPI instead of GitHub, and the S&P 500 notebooks cap the KS
+  parametric-bootstrap cost with an explicit `n_bootstrap=49`.
+- Citation metadata: Zenodo DOI and author ORCID added; JOSS paper draft
+  included under `paper/`.
+
 ## [0.2.0] - 2026-07-10
 
 ### Added

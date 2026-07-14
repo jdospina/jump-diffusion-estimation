@@ -16,8 +16,8 @@ authors:
     given-names: "Juan David"
     email: "jdospina@gmail.com"
     orcid: "https://orcid.org/0000-0002-3547-5247"
-version: "0.2.0"
-date-released: "2026-07-10"
+version: "0.2.1"
+date-released: "2026-07-13"
 doi: "10.5281/zenodo.21305522"
 license: MIT
 repository-code: "https://github.com/jdospina/jump-diffusion-estimation"

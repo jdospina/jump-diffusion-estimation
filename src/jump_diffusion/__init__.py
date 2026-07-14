@@ -5,7 +5,7 @@ A comprehensive Python library for simulating and estimating parameters
 of jump-diffusion processes with asymmetric jump distributions.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "Juan David OSPINA ARANGO"
 __email__ = "jdospina@gmail.com"
 
