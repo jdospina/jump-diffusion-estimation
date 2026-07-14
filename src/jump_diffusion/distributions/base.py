@@ -130,18 +130,20 @@ class JumpDistribution(ABC):
         jump_loc = self.characteristic_location(params)
 
         m = 2**j
-        if h is None:
+        if h is not None:
+            step = h
+        else:
             # Step chosen for resolution, then coarsened if the span could
             # not contain the mass of both densities (plus tail margins).
-            h = min(diffusion_std, jump_std) / 200.0
+            step = min(diffusion_std, jump_std) / 200.0
             half_span_needed = (
                 abs(diffusion_mean) + abs(jump_loc) + 10.0 * (diffusion_std + jump_std)
             )
-            if m * h < half_span_needed:
-                h = half_span_needed / m
+            if m * step < half_span_needed:
+                step = half_span_needed / m
 
         k = np.arange(-m + 0.5, m, 1.0)  # length 2*m, half-integer offsets
-        x_grid = k * h
+        x_grid = k * step
 
         f_diffusion = norm.pdf(x_grid, loc=diffusion_mean, scale=diffusion_std)
         f_jump = self.pdf(x_grid, params)
@@ -150,7 +152,7 @@ class JumpDistribution(ABC):
 
         # numpy's ifft already divides by n, unlike R's fft(..., inverse=TRUE)
         conv = np.real(np.fft.ifft(np.fft.fft(f_diffusion) * np.fft.fft(f_jump)))
-        conv *= h
+        conv *= step
         conv = np.concatenate([conv[m:], conv[:m]])  # re-center around x_grid
         conv = np.maximum(conv, 0.0)
 
